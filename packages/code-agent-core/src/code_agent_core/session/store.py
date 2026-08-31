@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .session import (
+from .entries import (
     MessageEntryPayload,
     SessionEntry,
     SessionEntryType,
@@ -74,7 +74,7 @@ class SessionStore:
 
     def append_event(self, event_payload: object) -> SessionEntry:
         """Append a run event entry without advancing the conversation head."""
-        from .session import RunEventEntryPayload
+        from .entries import RunEventEntryPayload
 
         if not isinstance(event_payload, RunEventEntryPayload):
             raise SessionError("run event entries require a RunEventEntryPayload")

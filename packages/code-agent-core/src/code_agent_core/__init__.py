@@ -21,18 +21,16 @@ from .runtime import (
     RunSpec,
 )
 from .session import (
+    BranchInfo,
     CompactionEntryPayload,
     MemoryEntryPayload,
     MessageEntryPayload,
     RunEventEntryPayload,
     SessionEntry,
     SessionEntryType,
-    SessionPayload,
-)
-from .session_store import (
-    BranchInfo,
     SessionError,
     SessionFileStore,
+    SessionPayload,
     SessionStore,
 )
 from .tools import (

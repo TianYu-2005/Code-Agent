@@ -5,7 +5,7 @@ from pathlib import Path
 
 from code_agent_llm import Message, MessageRole, ModelRequest, ProtocolModel
 
-from .session_store import SessionStore
+from ..session.store import SessionStore
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a terminal coding agent. Explore the workspace before editing, "

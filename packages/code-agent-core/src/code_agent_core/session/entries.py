@@ -8,7 +8,7 @@ from pydantic import Field, JsonValue, field_validator, model_validator
 
 from code_agent_llm.types import Message, ProtocolModel
 
-from .events import RuntimeEvent
+from ..events import RuntimeEvent
 
 
 class SessionEntryType(StrEnum):

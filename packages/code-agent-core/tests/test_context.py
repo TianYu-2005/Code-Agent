@@ -7,8 +7,12 @@ from code_agent_core.context import (
     estimate_tokens,
     load_project_instructions,
 )
-from code_agent_core.session import MessageEntryPayload, SessionEntry, SessionEntryType
-from code_agent_core.session_store import SessionStore
+from code_agent_core.session import (
+    MessageEntryPayload,
+    SessionEntry,
+    SessionEntryType,
+    SessionStore,
+)
 from code_agent_llm import Message, MessageRole, ToolCall
 
 

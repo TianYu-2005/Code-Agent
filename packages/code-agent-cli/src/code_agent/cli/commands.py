@@ -12,7 +12,7 @@ class CommandResult:
     argument: str | None = None
 
 
-KNOWN_COMMANDS = ("help", "new", "model", "quit", "sessions", "tree", "compact")
+KNOWN_COMMANDS = ("help", "new", "model", "quit", "sessions", "tree")
 
 
 def parse_input(line: str) -> CommandResult:
@@ -32,11 +32,10 @@ def parse_input(line: str) -> CommandResult:
 
 HELP_TEXT = """可用命令:
   /help     显示本帮助
-  /new      开始新会话（清空当前对话）
+  /new      开始新会话（自动持久化到 .code-agent/sessions/）
   /model    显示当前模型
-  /sessions 列出历史会话
+  /sessions 列出历史会话；/sessions <序号> 恢复；/sessions export <序号> 导出
   /tree     显示当前对话树
-  /compact  手动压缩上下文（尚未实现）
   /quit     退出
 
 其他输入会作为任务发送给 Agent。Ctrl+C 取消当前运行。"""

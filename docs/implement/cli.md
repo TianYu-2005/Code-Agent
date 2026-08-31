@@ -8,10 +8,12 @@
 
 | 模块 | 职责 |
 |---|---|
-| `cli/app.py` | REPL 主循环：读取输入、分发命令、运行 AgentLoop || `cli/renderer.py` | `RuntimeEvent` → 终端输出（流式文本、工具状态着色） |
+| `cli/app.py` | REPL 主循环：读取输入、分发命令、运行 AgentLoop |
+| `cli/renderer.py` | `RuntimeEvent` → 终端输出（流式文本、工具状态着色） |
 | `cli/approval.py` | `ApprovalPort` 终端实现（y/a/n 交互） |
-| `cli/commands.py` | 斜杠命令解析（/help /new /model /tree /quit 等） |
+| `cli/commands.py` | 斜杠命令解析（/help /new /model /tree /sessions /quit 等） |
 | `cli/interrupt.py` | SIGINT → `CancellationToken` |
+| `cli/sessions.py` | 工作区会话目录管理（创建/列出/恢复/导出） |
 | `config.py` | 环境变量读取 |
 | `bootstrap.py` | 组合根：装配 Provider、Registry、Executor、Loop |
 
@@ -63,6 +65,18 @@ CODE_AGENT_MAX_TURNS     默认 20
 
 此前裸 `input()` 依赖终端 readline：提示符中的 ANSI 转义与宽字符都会被误算列宽，导致退格删除错位、行编辑状态混乱。
 
+## 会话持久化
+
+会话自动持久化到 `<workspace>/.code-agent/sessions/<session-id>.jsonl`（`SessionFileStore` 逐条追加），首次创建目录时写入 `.code-agent/.gitignore` 忽略会话数据。
+
+`SessionManager`（`cli/sessions.py`）负责目录级管理：
+
+- `create()`：新建带时间戳 ID 的持久化会话（CLI 启动与 `/new` 都走这里）
+- `list_sessions()`：扫描目录、跳过空会话，按更新时间倒序返回摘要（标题取首条用户消息）
+- `load(id)` / `export_markdown(id)`：恢复会话、导出 Markdown 纪录
+
+`/sessions` 命令：无参数列出；`/sessions <序号>` 恢复（自动清理未使用的空会话文件）；`/sessions export <序号> [路径]` 导出。会话标题自动从首条消息生成，暂不提供重命名。恢复或新建会话后，组合根通过 `_rebind_session()` 重建 ContextManager 与 RunSpec（session_id 来自文件名）。
+
 ## 组合根
 
 `bootstrap.AgentRuntime` 是唯一允许同时依赖抽象和具体实现的组装点：
@@ -82,3 +96,4 @@ CODE_AGENT_MAX_TURNS     默认 20
 - 审批端口：y 确认、输入流可注入
 - 取消状态：信号状态转换
 - 组合根冒烟：8 个工具装配、Loop 创建成功
+- 会话持久化：创建（含 .gitignore）、列出/恢复/导出往返、空会话清理、非法 ID 拒绝、组合根绑定与切换会话

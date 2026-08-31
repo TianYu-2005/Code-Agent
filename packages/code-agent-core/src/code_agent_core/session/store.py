@@ -182,6 +182,16 @@ class SessionFileStore(SessionStore):
         self._path = path
         self._load()
 
+    @property
+    def session_id(self) -> str:
+        """Stable identifier derived from the journal filename."""
+        return self._path.stem
+
+    @property
+    def path(self) -> Path:
+        """Location of the JSONL journal backing this session."""
+        return self._path
+
     def append(self, entry: SessionEntry) -> SessionEntry:
         """Append an entry and immediately persist it to disk."""
         appended = super().append(entry)

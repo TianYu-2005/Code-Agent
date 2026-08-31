@@ -4,6 +4,7 @@ from .approval import TerminalApprovalPort
 from .commands import parse_input
 from .interrupt import CancelState
 from .renderer import TerminalRenderer
+from .sessions import SessionManager
 
 
 def __getattr__(name: str) -> object:
@@ -17,6 +18,7 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     "CancelState",
+    "SessionManager",
     "TerminalApprovalPort",
     "TerminalRenderer",
     "main",

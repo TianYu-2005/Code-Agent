@@ -3,12 +3,14 @@
 import asyncio
 import sys
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from code_agent_core.runtime.loop import LoopEndReason
 from code_agent_llm import Message, MessageRole
 
 from .commands import HELP_TEXT, CommandResult, parse_input
+from .sessions import SessionSummary
 
 if TYPE_CHECKING:
     from ..bootstrap import AgentRuntime
@@ -42,17 +44,14 @@ def _handle_command(runtime: "AgentRuntime", command: str, argument: str | None)
     if command == "help":
         renderer.info(HELP_TEXT)
     elif command == "new":
-        from code_agent_core.session import SessionStore
-
-        runtime.session = SessionStore()
+        runtime.new_session()
         renderer.info("已开始新会话。")
-        _rebuild_runtime(runtime)
     elif command == "model":
         renderer.info(f"当前模型: {runtime.config.model}")
         if runtime.config.base_url:
             renderer.info(f"Endpoint: {runtime.config.base_url}")
     elif command == "sessions":
-        renderer.info("会话管理将在持久化配置完成后提供。")
+        _handle_sessions(runtime, argument)
     elif command == "tree":
         branches = runtime.session.list_branches()
         if not branches:
@@ -60,20 +59,67 @@ def _handle_command(runtime: "AgentRuntime", command: str, argument: str | None)
         else:
             for branch in branches:
                 renderer.info(f"  分支 {branch.head_id}: {branch.message_count} 条消息")
-    elif command == "compact":
-        renderer.info("手动压缩尚未实现，将由上下文压缩模块提供。")
     elif command == "unknown":
         renderer.info(f"未知命令: /{argument}\n{HELP_TEXT}")
     return True
 
 
-def _rebuild_runtime(runtime: "AgentRuntime") -> None:
-    """Rebuild context manager after a session reset."""
-    from code_agent_core.context import ContextManager, ContextPolicy, load_project_instructions
+def _session_by_index(runtime: "AgentRuntime", number: int) -> SessionSummary | None:
+    sessions = runtime.session_manager.list_sessions()
+    if number < 1 or number > len(sessions):
+        runtime.renderer.info(f"序号超出范围（1-{len(sessions)}）。")
+        return None
+    return sessions[number - 1]
 
-    instructions = load_project_instructions(runtime.workspace)
-    policy = ContextPolicy(project_instructions=instructions) if instructions else ContextPolicy()
-    runtime.context_manager = ContextManager(runtime.session, policy=policy)
+
+def _resume_session(runtime: "AgentRuntime", number: int) -> None:
+    summary = _session_by_index(runtime, number)
+    if summary is None:
+        return
+    try:
+        runtime.load_session(summary.session_id)
+    except ValueError as error:
+        runtime.renderer.info(f"恢复失败: {error}")
+        return
+    runtime.renderer.info(f"已恢复会话 {summary.session_id}（{summary.message_count} 条消息）。")
+
+
+def _export_session(runtime: "AgentRuntime", number: int, target: Path | None) -> None:
+    summary = _session_by_index(runtime, number)
+    if summary is None:
+        return
+    try:
+        path = runtime.session_manager.export_markdown(summary.session_id, target)
+    except (ValueError, OSError) as error:
+        runtime.renderer.info(f"导出失败: {error}")
+        return
+    runtime.renderer.info(f"已导出到 {path}")
+
+
+def _handle_sessions(runtime: "AgentRuntime", argument: str | None) -> None:
+    """List, resume, or export persisted sessions."""
+    renderer = runtime.renderer
+    parts = (argument or "").split()
+    if not parts:
+        sessions = runtime.session_manager.list_sessions()
+        if not sessions:
+            renderer.info("暂无历史会话。")
+            return
+        renderer.info("历史会话（/sessions <序号> 恢复，/sessions export <序号> 导出）:")
+        for index, summary in enumerate(sessions, start=1):
+            local = summary.updated_at.astimezone().strftime("%Y-%m-%d %H:%M")
+            renderer.info(f"  {index}. [{local}] {summary.message_count} 条消息 — {summary.title}")
+        return
+    if parts[0] == "export":
+        if len(parts) < 2 or not parts[1].isdigit():
+            renderer.info("用法: /sessions export <序号> [路径]")
+            return
+        _export_session(runtime, int(parts[1]), Path(parts[2]) if len(parts) > 2 else None)
+        return
+    if parts[0].isdigit():
+        _resume_session(runtime, int(parts[0]))
+        return
+    renderer.info("用法: /sessions [序号] | /sessions export <序号> [路径]")
 
 
 async def run_app(runtime: "AgentRuntime") -> None:

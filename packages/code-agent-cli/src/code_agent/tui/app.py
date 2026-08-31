@@ -339,18 +339,22 @@ class CodeAgentApp(App[None]):
         log.write(line)
 
     def _transcript_user(self, text: str) -> None:
+        log = self.query_one("#transcript", RichLog)
+        log.write(Text(""))
         label, style = USER_STYLE
         line = Text()
         line.append(f"{label} ", style=style)
         line.append(text)
-        self._transcript(line)
+        log.write(line)
 
     def _transcript_assistant(self, text: str) -> None:
+        log = self.query_one("#transcript", RichLog)
+        log.write(Text(""))
         label, style = ASSISTANT_STYLE
         line = Text()
         line.append(f"{label} ", style=style)
         line.append(text)
-        self._transcript(line)
+        log.write(line)
 
     def _set_status(self, status: str) -> None:
         assert self._runtime is not None

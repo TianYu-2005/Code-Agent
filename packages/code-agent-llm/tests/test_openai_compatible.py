@@ -357,6 +357,7 @@ def test_unexpected_client_error_is_sanitized() -> None:
 
     assert raised.value.code is ProviderErrorCode.UNKNOWN
     assert "secret" not in str(raised.value)
+    assert "RuntimeError" in str(raised.value)
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
 

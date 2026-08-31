@@ -459,5 +459,5 @@ def _normalize_error(error: Exception) -> ModelProviderError:
         )
     return ModelProviderError(
         ProviderErrorCode.UNKNOWN,
-        "unexpected model provider error",
+        f"unexpected model provider error: {type(error).__name__}",
     )

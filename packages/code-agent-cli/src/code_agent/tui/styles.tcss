@@ -1,7 +1,10 @@
-/* Inline TUI layout: scrolling transcript above a fixed prompt area. */
+/* Inline TUI layout: scrolling transcript above a fixed prompt area.
+   The height follows the terminal size (80vh), so the interface grows
+   and shrinks with the window instead of staying fixed. */
 
 Screen {
-    height: 28;
+    height: 80vh;
+    min-height: 14;
     layers: main approval;
 }
 

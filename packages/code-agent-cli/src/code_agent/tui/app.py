@@ -30,6 +30,15 @@ HELP_TEXT = """可用命令:
 
 其他输入会作为任务发送给 Agent。Ctrl+C 取消当前运行。"""
 
+BANNER = (
+    "███████ ███████ ███████  ██████  ██████  ██████ ███████ ███████",
+    "██      ██      ██      ██      ██   ██ ██   ██ ██      ██   ██",
+    "███████ ███████ ███████ ██████  ██████  ██████  ██████  ███████",
+    "     ██      ██      ██ ██      ██   ██ ██   ██ ██   ██ ██   ██",
+    "███████ ███████ ███████  ██████  ██████  ██████ ███████ ██   ██",
+)
+BANNER_COLORS = ("bright_cyan", "cyan", "bright_magenta", "magenta", "bright_blue")
+
 TOOL_STATUS = {
     "success": ("✓", "green"),
     "error": ("✗", "red"),
@@ -38,8 +47,8 @@ TOOL_STATUS = {
     "cancelled": ("·", "yellow"),
 }
 
-USER_STYLE = ("你", "bold cyan")
-ASSISTANT_STYLE = ("AI", "bold magenta")
+USER_STYLE = ("User", "bold cyan")
+ASSISTANT_STYLE = ("Agent", "bold magenta")
 
 
 class CodeAgentApp(App[None]):
@@ -73,11 +82,11 @@ class CodeAgentApp(App[None]):
         assert self._runtime is not None
         model = self._runtime.config.model
         log = self.query_one("#transcript", RichLog)
-        banner = Text()
-        banner.append("Code Agent", style="bold white")
-        banner.append(f"  {model}", style="dim")
-        banner.append("\n输入任务开始，/help 查看命令，Ctrl+C 取消当前运行。\n", style="dim")
-        log.write(banner)
+        for line, color in zip(BANNER, BANNER_COLORS, strict=True):
+            log.write(Text(line, style=color))
+        log.write(Text(""))
+        log.write(Text(f"  {model} · /help 查看命令 · Ctrl+C 取消运行", style="dim"))
+        log.write(Text(""))
         self._set_status("就绪")
         self.query_one("#prompt", Input).focus()
 
@@ -152,11 +161,13 @@ class CodeAgentApp(App[None]):
         elif kind == "tool_completed":
             status = str(payload.get("status", "success"))
             icon, color = TOOL_STATUS.get(status, ("·", "white"))
+            self._transcript(Text(""))
             line = Text("  ▸ ", style="dim")
             line.append(icon, style=color)
             line.append(f" {status}", style="dim")
             self._transcript(line)
         elif kind == "context_compacted":
+            self._transcript(Text(""))
             if str(payload.get("status")) == "failed":
                 self._transcript(Text("◇ 上下文压缩失败，已按预算截断旧消息", style="dim"))
             else:
@@ -214,6 +225,7 @@ class CodeAgentApp(App[None]):
 
     def _handle_command(self, text: str) -> None:
         assert self._runtime is not None
+        self._transcript(Text(""))
         parts = text[1:].split()
         command = parts[0].lower() if parts else ""
         argument = parts[1] if len(parts) > 1 else None
@@ -340,6 +352,7 @@ class CodeAgentApp(App[None]):
 
     def _transcript_user(self, text: str) -> None:
         log = self.query_one("#transcript", RichLog)
+        log.write(Text(""))
         log.write(Text(""))
         label, style = USER_STYLE
         line = Text()

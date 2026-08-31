@@ -135,6 +135,61 @@ def test_help_and_model_commands(
     asyncio.run(_drive(app, actions))
 
 
+def test_banner_and_speaker_labels(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from code_agent_llm import FinishReason, ModelResponse
+
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+
+    async def actions(pilot: Any) -> None:
+        assert "███████" in _log_text(app)  # ASCII-art banner present
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "ping"
+        await pilot.press("enter")
+        await _wait_for(lambda: not app._task_running and "pong" in _log_text(app))
+        log_text = _log_text(app)
+        assert "User ping" in log_text
+        assert "Agent pong" in log_text
+
+    app = _build_app(
+        tmp_path,
+        [
+            [
+                _event("text_delta", "pong"),
+                _event(
+                    "completed",
+                    ModelResponse(content="pong", finish_reason=FinishReason.STOP),
+                ),
+            ]
+        ],
+    )
+    asyncio.run(_drive(app, actions))
+
+
+def test_layout_follows_terminal_size(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+    heights: list[int] = []
+
+    async def measure(size: tuple[int, int]) -> int:
+        app = _build_app(tmp_path, [])
+        async with app.run_test(size=size) as pilot:
+            await pilot.pause()
+            # The inline height is derived from the Screen CSS (80vh),
+            # so it tracks the terminal height instead of staying fixed.
+            return app._get_inline_height()
+
+    heights.append(asyncio.run(measure((100, 40))))
+    heights.append(asyncio.run(measure((100, 20))))
+    assert heights[0] >= 30
+    assert heights[1] <= 18
+    assert heights[0] > heights[1]
+
+
 # ------------------------------------------------------------------ helpers
 
 
@@ -157,7 +212,7 @@ def _log_text(app: CodeAgentApp) -> str:
     from textual.widgets import RichLog
 
     log = app.query_one("#transcript", RichLog)
-    return "\n".join(segment.text for line in log.lines for segment in line)
+    return "\n".join("".join(segment.text for segment in line) for line in log.lines)
 
 
 async def _wait_for(predicate: Callable[[], bool], timeout: float = 5.0) -> None:

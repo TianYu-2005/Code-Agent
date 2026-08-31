@@ -28,24 +28,35 @@ uv sync --all-packages
 
 ## 配置
 
-通过环境变量配置，无需配置文件：
+通过环境变量配置，无需配置文件。默认开箱即用 DeepSeek，只需设置 API Key：
 
 | 环境变量 | 必填 | 说明 | 默认值 |
 |---|---|---|---|
 | `CODE_AGENT_API_KEY` | 是 | 模型服务 API Key | — |
-| `CODE_AGENT_BASE_URL` | 否 | OpenAI 兼容服务地址 | 官方默认 |
-| `CODE_AGENT_MODEL` | 否 | 模型名称 | `deepseek-chat` |
+| `CODE_AGENT_BASE_URL` | 否 | OpenAI 兼容服务地址 | `https://api.deepseek.com` |
+| `CODE_AGENT_MODEL` | 否 | 模型名称 | `deepseek-v4-flash` |
 | `CODE_AGENT_MAX_TURNS` | 否 | 单次任务最大循环轮数 | `20` |
 
-以 DeepSeek 为例：
+最简配置：
 
 ```bash
 export CODE_AGENT_API_KEY="sk-xxxx"
-export CODE_AGENT_BASE_URL="https://api.deepseek.com"
-export CODE_AGENT_MODEL="deepseek-chat"
 ```
 
-API Key 从 [DeepSeek 开放平台](https://platform.deepseek.com) 获取。由于采用 OpenAI 兼容协议，vLLM、Ollama、OpenRouter 等服务同样可以接入。
+DeepSeek 可用模型（参见 [DeepSeek API 文档](https://api-docs.deepseek.com/zh-cn/)）：
+
+- `deepseek-v4-flash` — 旗舰轻量模型（默认）
+- `deepseek-v4-pro` — 更强推理能力
+- `deepseek-v4-flash-vision-exp` — 实验性，支持图片输入
+
+接入其他 OpenAI 兼容服务（vLLM、Ollama、OpenRouter 等）时，覆盖 base_url 和 model 即可：
+
+```bash
+export CODE_AGENT_BASE_URL="https://your-service.com/v1"
+export CODE_AGENT_MODEL="your-model"
+```
+
+API Key 从 [DeepSeek 开放平台](https://platform.deepseek.com/api_keys) 获取。
 
 ## 使用教程
 

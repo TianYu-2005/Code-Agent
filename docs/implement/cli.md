@@ -22,12 +22,12 @@
 
 ```text
 CODE_AGENT_API_KEY       必填
-CODE_AGENT_BASE_URL      可选，如 https://api.deepseek.com
-CODE_AGENT_MODEL         默认 deepseek-chat
+CODE_AGENT_BASE_URL      默认 https://api.deepseek.com
+CODE_AGENT_MODEL         默认 deepseek-v4-flash
 CODE_AGENT_MAX_TURNS     默认 20
 ```
 
-`base_url` 的域名会自动加入 Provider 的可信主机列表，满足模型层的 SSRF 防护要求。
+默认值按 [DeepSeek API 文档](https://api-docs.deepseek.com/zh-cn/) 对齐：只设置 API Key 即可直连 DeepSeek。`base_url` 的域名会自动加入 Provider 的可信主机列表，满足模型层的 SSRF 防护要求。
 
 ## 交互流程
 

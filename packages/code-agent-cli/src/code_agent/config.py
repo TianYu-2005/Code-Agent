@@ -1,12 +1,14 @@
 """Configuration loaded from environment variables."""
 
 import os
+from urllib.parse import urlparse
 
 from pydantic import SecretStr
 
 from code_agent_llm import OpenAICompatibleConfig
 
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-v4-flash"
+DEFAULT_BASE_URL = "https://api.deepseek.com"
 
 
 class ConfigError(ValueError):
@@ -20,7 +22,7 @@ class AppConfig:
         self,
         *,
         api_key: str,
-        base_url: str | None,
+        base_url: str,
         model: str,
         workspace: str,
         max_turns: int,
@@ -34,21 +36,16 @@ class AppConfig:
     @property
     def provider_config(self) -> OpenAICompatibleConfig:
         """Build the OpenAI-compatible provider connection settings."""
-        trusted_hosts = frozenset({self.base_url_host}) if self.base_url_host else frozenset()
         return OpenAICompatibleConfig(
             api_key=SecretStr(self.api_key),
             base_url=self.base_url,
-            trusted_base_url_hosts=trusted_hosts,
+            trusted_base_url_hosts=frozenset({self.base_url_host}),
         )
 
     @property
-    def base_url_host(self) -> str | None:
-        """Extract the hostname from a configured base URL."""
-        if not self.base_url:
-            return None
-        from urllib.parse import urlparse
-
-        return urlparse(self.base_url).hostname
+    def base_url_host(self) -> str:
+        """Extract the hostname from the configured base URL."""
+        return urlparse(self.base_url).hostname or ""
 
 
 def load_config(workspace: str | None = None) -> AppConfig:
@@ -56,7 +53,7 @@ def load_config(workspace: str | None = None) -> AppConfig:
     api_key = os.environ.get("CODE_AGENT_API_KEY", "").strip()
     if not api_key:
         raise ConfigError("CODE_AGENT_API_KEY is not set; export it before starting the agent")
-    base_url = os.environ.get("CODE_AGENT_BASE_URL", "").strip() or None
+    base_url = os.environ.get("CODE_AGENT_BASE_URL", "").strip() or DEFAULT_BASE_URL
     model = os.environ.get("CODE_AGENT_MODEL", "").strip() or DEFAULT_MODEL
     resolved_workspace = workspace or os.getcwd()
     max_turns = int(os.environ.get("CODE_AGENT_MAX_TURNS", "20"))

@@ -41,13 +41,26 @@ def test_config_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_config_loads_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
     monkeypatch.setenv("CODE_AGENT_BASE_URL", "https://api.deepseek.com")
-    monkeypatch.setenv("CODE_AGENT_MODEL", "deepseek-chat")
+    monkeypatch.setenv("CODE_AGENT_MODEL", "deepseek-v4-pro")
 
     config = load_config(workspace=str(tmp_path))
 
-    assert config.model == "deepseek-chat"
+    assert config.model == "deepseek-v4-pro"
     assert config.base_url == "https://api.deepseek.com"
     assert config.provider_config.api_key.get_secret_value() == "test-key"
+    assert config.provider_config.trusted_base_url_hosts == frozenset({"api.deepseek.com"})
+
+
+def test_config_defaults_to_deepseek(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+    monkeypatch.delenv("CODE_AGENT_BASE_URL", raising=False)
+    monkeypatch.delenv("CODE_AGENT_MODEL", raising=False)
+
+    config = load_config(workspace=str(tmp_path))
+
+    assert config.model == "deepseek-v4-flash"
+    assert config.base_url == "https://api.deepseek.com"
+    assert config.base_url_host == "api.deepseek.com"
     assert config.provider_config.trusted_base_url_hosts == frozenset({"api.deepseek.com"})
 
 
@@ -136,10 +149,10 @@ def test_banner_and_info_use_streams() -> None:
     output = io.StringIO()
     renderer = TerminalRenderer(output_stream=output)
 
-    renderer.banner("/workspace", "deepseek-chat")
+    renderer.banner("/workspace", "deepseek-v4-flash")
     renderer.info("hello info")
 
     text = output.getvalue()
     assert "Code Agent" in text
-    assert "deepseek-chat" in text
+    assert "deepseek-v4-flash" in text
     assert "hello info" in text

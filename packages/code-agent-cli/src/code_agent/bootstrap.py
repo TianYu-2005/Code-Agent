@@ -17,11 +17,16 @@ from code_agent_core.context import (
 )
 from code_agent_core.runtime.loop import AgentLoop as Loop
 from code_agent_core.session import SessionStore
-from code_agent_llm import OpenAICompatibleProvider, RetryingProvider, RetryPolicy
+from code_agent_llm import (
+    ModelProvider,
+    OpenAICompatibleProvider,
+    RetryingProvider,
+    RetryPolicy,
+)
 
 from .cli.approval import TerminalApprovalPort
 from .cli.interrupt import CancelState
-from .cli.renderer import TerminalRenderer
+from .cli.renderer import RecordingSink, TerminalRenderer
 from .coding_tools import default_coding_tools
 from .config import AppConfig
 
@@ -29,15 +34,26 @@ from .config import AppConfig
 class AgentRuntime:
     """Fully wired agent ready to serve CLI interactions."""
 
-    def __init__(self, config: AppConfig, session: SessionStore | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        session: SessionStore | None = None,
+        *,
+        provider: ModelProvider | None = None,
+        renderer: TerminalRenderer | None = None,
+    ) -> None:
         self.config = config
         self.workspace = Path(config.workspace).resolve()
         self.session = session or SessionStore()
-        self.renderer = TerminalRenderer()
+        self.renderer = renderer or TerminalRenderer()
         self.cancel_state = CancelState()
 
-        provider = OpenAICompatibleProvider(config.provider_config)
-        self.provider = RetryingProvider(provider, RetryPolicy())
+        if provider is None:
+            provider = RetryingProvider(
+                OpenAICompatibleProvider(config.provider_config),
+                RetryPolicy(),
+            )
+        self.provider = provider
 
         self.registry = ToolRegistry()
         for tool in default_coding_tools():
@@ -72,4 +88,5 @@ class AgentRuntime:
             tool_executor=self.executor,
             run_spec=self.run_spec,
             cancellation=self.cancel_state,
+            event_sink=RecordingSink(self.renderer),
         )

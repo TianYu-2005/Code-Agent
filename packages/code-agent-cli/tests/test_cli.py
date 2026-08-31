@@ -156,3 +156,67 @@ def test_banner_and_info_use_streams() -> None:
     assert "Code Agent" in text
     assert "deepseek-v4-flash" in text
     assert "hello info" in text
+
+
+def test_runtime_streams_events_to_renderer(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The composition root must pipe loop events into the renderer."""
+    from code_agent.bootstrap import AgentRuntime
+    from code_agent_llm import (
+        FakeProvider,
+        FinishReason,
+        Message,
+        MessageRole,
+        ModelEvent,
+        ModelEventType,
+        ModelResponse,
+        ToolCall,
+    )
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "note.txt").write_text("hello agent\n", encoding="utf-8")
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+
+    first_turn = (
+        ModelEvent(type=ModelEventType.TEXT_DELTA, text_delta="Reading the file.\n"),
+        ModelEvent(
+            type=ModelEventType.COMPLETED,
+            response=ModelResponse(
+                content="Reading the file.",
+                tool_calls=(
+                    ToolCall(id="call-1", name="read_file", arguments_json='{"path": "note.txt"}'),
+                ),
+                finish_reason=FinishReason.TOOL_CALLS,
+            ),
+        ),
+    )
+    second_turn = (
+        ModelEvent(type=ModelEventType.TEXT_DELTA, text_delta="All done."),
+        ModelEvent(
+            type=ModelEventType.COMPLETED,
+            response=ModelResponse(
+                content="All done.",
+                tool_calls=(),
+                finish_reason=FinishReason.STOP,
+            ),
+        ),
+    )
+    provider = FakeProvider((first_turn, second_turn))
+    output = io.StringIO()
+    config = load_config(workspace=str(tmp_path))
+    runtime = AgentRuntime(
+        config,
+        provider=provider,
+        renderer=TerminalRenderer(output_stream=output),
+    )
+
+    message = Message(id="user-1", role=MessageRole.USER, content="read the note")
+    result = asyncio.run(runtime.make_loop().run(message))
+
+    text = output.getvalue()
+    assert result.end_reason.value == "completed"
+    assert "Reading the file." in text
+    assert "All done." in text
+    assert "[success]" in text

@@ -135,6 +135,35 @@ def test_help_and_model_commands(
     asyncio.run(_drive(app, actions))
 
 
+def test_assistant_reply_renders_markdown(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from code_agent_llm import FinishReason, ModelResponse
+
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+    md = "# Title\n\nUse `code` and **bold**.\n\n- item one\n- item two"
+
+    async def actions(pilot: Any) -> None:
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "markdown?"
+        await pilot.press("enter")
+        await _wait_for(lambda: not app._task_running and "Title" in _log_text(app))
+        text = _log_text(app)
+        assert "Agent" in text
+        assert "Title" in text
+        assert "item one" in text
+        # Raw markdown markers must not leak through.
+        assert "**bold**" not in text
+        assert "```" not in text
+
+    app = _build_app(
+        tmp_path,
+        [[_event("completed", ModelResponse(content=md, finish_reason=FinishReason.STOP))]],
+    )
+    asyncio.run(_drive(app, actions))
+
+
 def test_banner_and_speaker_labels(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -155,7 +184,8 @@ def test_banner_and_speaker_labels(
         await _wait_for(lambda: not app._task_running and "pong" in _log_text(app))
         log_text = _log_text(app)
         assert "User ping" in log_text
-        assert "Agent pong" in log_text
+        assert "Agent" in log_text
+        assert "pong" in log_text
 
     app = _build_app(
         tmp_path,

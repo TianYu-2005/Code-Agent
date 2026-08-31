@@ -14,6 +14,12 @@ from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Input, RichLog, Static
 
+import pyfiglet
+from rich.console import Group
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.text import Text
+
 from .messages import AgentEvent, ApprovalAsked, TaskFinished
 from .renderer import TuiApprovalPort, TuiRenderer
 
@@ -392,10 +398,12 @@ class CodeAgentApp(App[None]):
         log = self.query_one("#transcript", RichLog)
         log.write(Text(""))
         label, style = ASSISTANT_STYLE
-        line = Text()
-        line.append(f"{label} ", style=style)
-        line.append(text)
-        log.write(line)
+        # The reply is rendered as Markdown so headings, lists, **bold**,
+        # `code` and links display with proper styling instead of raw
+        # source markers. The colored speaker label sits above the body.
+        header = Text(f"{label} ", style=style)
+        body = Markdown(text, code_theme="native", hyperlinks=True)
+        log.write(Group(header, body))
 
     def _set_status(self, status: str) -> None:
         assert self._runtime is not None

@@ -128,7 +128,7 @@ def test_journey_task_approval_persist_resume(
         assert (tmp_path / "hello.txt").read_text(encoding="utf-8") == "hello e2e"
         log = _log_text(app)
         assert "User 写一个 hello.txt" in log
-        assert "Agent 已创建 hello.txt" in log
+        assert "Agent" in log and "已创建 hello.txt" in log
 
     app = _build_app(tmp_path, first_scripts)
     asyncio.run(_drive(app, first_session))
@@ -149,7 +149,7 @@ def test_journey_task_approval_persist_resume(
         # The restored history must reach the model on the next request.
         await _submit(app2, pilot, "继续")
         await _wait_for(lambda: not app2._task_running and "继续没问题" in _log_text(app2))
-        assert "Agent 继续没问题" in _log_text(app2)
+        assert "Agent" in _log_text(app2) and "继续没问题" in _log_text(app2)
 
         from code_agent_llm import FakeProvider
 
@@ -296,7 +296,7 @@ def test_journey_model_error_then_recovery(
         # The UI stays usable: the next task works.
         await _submit(app, pilot, "第二问")
         await _wait_for(lambda: not app._task_running and "恢复了" in _log_text(app))
-        assert "Agent 恢复了" in _log_text(app)
+        assert "Agent" in _log_text(app) and "恢复了" in _log_text(app)
 
     asyncio.run(_drive(app, drive))
 

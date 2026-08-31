@@ -152,6 +152,8 @@ pytest
 - 新工具没有绕过 `ToolExecutor`；
 - Session 和事件格式变更已更新 `schema_version` 或迁移逻辑。
 
+提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/) 规范，使用 `feat` / `fix` / `docs` / `chore` / `test` / `refactor` 等类型前缀，格式如 `feat(cli): add compact command`，保持描述简洁。
+
 ## 8. 完成一个模块的判定标准
 
 一个模块只有同时满足以下条件才算完成：

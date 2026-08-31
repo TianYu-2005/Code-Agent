@@ -83,7 +83,9 @@ async def run_app(runtime: "AgentRuntime") -> None:
     while True:
         try:
             renderer.info("")
-            user_input = input("\033[1m你> \033[0m").strip()
+            # Keep the prompt plain: ANSI escapes break readline cursor math
+            # and make backspace behave incorrectly on some terminals.
+            user_input = input("你> ").strip()
         except (EOFError, KeyboardInterrupt):
             renderer.info("\n再见。")
             return

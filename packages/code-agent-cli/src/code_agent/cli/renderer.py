@@ -89,7 +89,8 @@ class TerminalRenderer:
     def _begin_tool(self, event: RuntimeEvent) -> None:
         tool_call_id = event.tool_call_id or ""
         self._current_tool = tool_call_id
-        self._output.write(f"\n{CYAN}▸ 工具执行中...{RESET} ")
+        name = str(event.payload.get("tool", "工具"))
+        self._output.write(f"\n{CYAN}▸ {name}{RESET} ")
 
     def _end_tool(self, event: RuntimeEvent) -> None:
         status = str(event.payload.get("status", "success"))

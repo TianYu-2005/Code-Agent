@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from code_agent_core import (
+    ApprovalPort,
     DefaultPermissionPolicy,
     RunBudgets,
     RunSpec,
@@ -17,6 +18,7 @@ from code_agent_core.context import (
     load_project_instructions,
 )
 from code_agent_core.runtime.loop import AgentLoop as Loop
+from code_agent_core.runtime.spec import EventSink
 from code_agent_core.session import SessionStore
 from code_agent_llm import (
     ModelProvider,
@@ -43,6 +45,8 @@ class AgentRuntime:
         *,
         provider: ModelProvider | None = None,
         renderer: TerminalRenderer | None = None,
+        approval_port: ApprovalPort | None = None,
+        event_sink: EventSink | None = None,
     ) -> None:
         self.config = config
         self.workspace = Path(config.workspace).resolve()
@@ -50,6 +54,7 @@ class AgentRuntime:
         self.session = session if session is not None else self.session_manager.create()
         self.renderer = renderer or TerminalRenderer()
         self.cancel_state = CancelState()
+        self._event_sink = event_sink
 
         if provider is None:
             provider = RetryingProvider(
@@ -66,7 +71,7 @@ class AgentRuntime:
         self.executor = ToolExecutor(
             self.registry,
             DefaultPermissionPolicy(),
-            TerminalApprovalPort(),
+            approval_port or TerminalApprovalPort(),
         )
 
         self._rebind_session()
@@ -109,6 +114,6 @@ class AgentRuntime:
             tool_executor=self.executor,
             run_spec=self.run_spec,
             cancellation=self.cancel_state,
-            event_sink=RecordingSink(self.renderer),
+            event_sink=self._event_sink or RecordingSink(self.renderer),
             compactor=self.compactor,
         )

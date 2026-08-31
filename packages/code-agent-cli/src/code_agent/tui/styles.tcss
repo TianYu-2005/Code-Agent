@@ -1,0 +1,68 @@
+/* Inline TUI layout: scrolling transcript above a fixed prompt area. */
+
+Screen {
+    height: 28;
+    layers: main approval;
+}
+
+#main {
+    height: 100%;
+    layout: vertical;
+}
+
+#transcript {
+    height: 1fr;
+    border: round $panel-darken-2;
+    border-title-color: $accent;
+    padding: 0 1;
+    scrollbar-size: 1 1;
+    scrollbar-background: $panel;
+    scrollbar-color: $accent-darken-2;
+}
+
+#streaming {
+    height: auto;
+    max-height: 10;
+    margin: 0 1 0 1;
+    padding: 0 1;
+    color: $text;
+    background: $panel-darken-1;
+    border-left: outer $accent;
+    display: none;
+}
+
+#streaming.active {
+    display: block;
+}
+
+#approval {
+    height: auto;
+    margin: 0 1 0 1;
+    padding: 0 1;
+    border: round $warning;
+    background: $panel-darken-1;
+    display: none;
+}
+
+#approval.visible {
+    display: block;
+}
+
+#prompt {
+    dock: bottom;
+    margin: 0 1 0 1;
+    border: round $accent-darken-1;
+    background: $boost;
+}
+
+#prompt:focus {
+    border: round $accent;
+}
+
+#status {
+    dock: bottom;
+    height: 1;
+    margin: 0 1 0 1;
+    background: $panel;
+    color: $text-muted;
+}

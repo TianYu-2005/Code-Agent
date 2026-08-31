@@ -192,6 +192,7 @@ class AgentLoop:
             run_id=run_id,
             turn_id=turn.turn_id,
             model_call_id=turn.model_call_id,
+            payload={"content": response.content},
         )
 
         if not response.tool_calls:
@@ -253,6 +254,7 @@ class AgentLoop:
             run_id=run_id,
             turn_id=turn.turn_id,
             tool_call_id=tool_call_id,
+            payload={"tool": call.name},
         )
 
         context = ExecutionContext(

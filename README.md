@@ -1,6 +1,6 @@
 # Code Agent
 
-一个不依赖 Agent 框架、从协议层开始自研的终端编码助手。基于 ReAct 循环实现「模型推理 → 工具执行 → 结果反馈」的多轮闭环，支持流式输出、工具审批、Ctrl+C 取消和树状会话。
+一个不依赖 Agent 框架、从协议层开始自研的终端编码助手。基于 ReAct 循环实现「模型推理 → 工具执行 → 结果反馈」的多轮闭环，默认提供 inline TUI（Textual）界面，支持流式输出、工具审批、Ctrl+C 取消和树状会话。
 
 ## 功能特性
 
@@ -67,7 +67,14 @@ cd /path/to/your/project   # 工作区 = 启动时所在目录
 uv run --project /path/to/Code-Agent code-agent
 ```
 
-启动后会显示 banner（工作区路径 + 模型名）和 `你>` 提示符。
+默认启动 **TUI 界面**（Textual inline 模式，Claude Code 同款形态）：滚动对话流、流式回复、工具状态、黄色审批面板和底部状态栏。切换经典 CLI 交互：
+
+```bash
+code-agent --cli    # 显式使用 CLI
+code-agent          # 管道/CI 等非 TTY 环境自动降级为 CLI
+```
+
+两种入口共享会话数据，可随时互换。TUI 中的操作：回车提交任务、`y/a/n` 审批、`Ctrl+C` 取消运行（空闲时退出）、`/help` 查看命令。
 
 ### 执行任务
 
@@ -140,7 +147,7 @@ uv run --project /path/to/Code-Agent code-agent
 packages/
 ├── code-agent-llm/    # 模型层：Provider 协议、OpenAI 兼容适配、重试、FakeProvider
 ├── code-agent-core/   # 核心层：tools / session / context / runtime（Agent Loop）
-└── code-agent-cli/    # 应用层：CLI 交互、审批、渲染、8 个 Coding Tools
+└── code-agent-cli/    # 应用层：TUI 与 CLI 双入口、审批、渲染、8 个 Coding Tools
 ```
 
 分层依赖方向：`cli → core → llm`，核心层不感知终端，未来可用 TUI 替换 CLI 而零改动核心。

@@ -8,6 +8,7 @@ dependencies = [
     "code-agent-llm",
     "prompt-toolkit>=3.0,<4",
     "pydantic>=2.11,<3",
+    "textual>=8.2.8",
 ]
 
 [tool.uv.sources]
@@ -19,7 +20,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-code-agent = "code_agent.cli.app:main"
+code-agent = "code_agent.main:main"
+code-agent-cli = "code_agent.cli.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/code_agent"]

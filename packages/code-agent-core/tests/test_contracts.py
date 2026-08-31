@@ -219,6 +219,7 @@ def test_session_entry_supports_typed_payloads_and_round_trip() -> None:
                 source_entry_ids=("entry-1",),
                 branch_head_id="entry-1",
                 model="test-model",
+                content_hash="a" * 64,
             ),
         ),
         (

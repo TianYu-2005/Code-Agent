@@ -41,6 +41,15 @@ class TerminalRenderer:
         elif event.type is RuntimeEventType.MODEL_STARTED:
             self._current_tool = None
             self._output.write("\n")
+        elif event.type is RuntimeEventType.CONTEXT_COMPACTED:
+            status = str(event.payload.get("status", "compacted"))
+            if status == "failed":
+                self._output.write(f"{DIM}◇ 上下文压缩失败，已按预算截断旧消息{RESET}\n")
+            else:
+                count = event.payload.get("messages_compacted", 0)
+                self._output.write(
+                    f"{DIM}◇ 上下文已自动压缩（{count} 条历史消息转为摘要）{RESET}\n"
+                )
         elif event.type is RuntimeEventType.TOOL_STARTED:
             self._begin_tool(event)
         elif event.type is RuntimeEventType.TOOL_COMPLETED:

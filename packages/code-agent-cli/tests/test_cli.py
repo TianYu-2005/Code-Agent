@@ -113,6 +113,36 @@ def test_renderer_streams_delta_and_tool_status() -> None:
     assert output.getvalue().endswith("\n")
 
 
+def test_renderer_shows_context_compacted() -> None:
+    output = io.StringIO()
+    renderer = TerminalRenderer(output_stream=output)
+
+    from code_agent_core import RuntimeEvent, RuntimeEventType
+
+    compacted = RuntimeEvent(
+        type=RuntimeEventType.CONTEXT_COMPACTED,
+        session_id="s1",
+        run_id="r1",
+        turn_id="t1",
+        payload={"status": "compacted", "messages_compacted": 12, "tokens_before": 41000},
+    )
+    failed = RuntimeEvent(
+        type=RuntimeEventType.CONTEXT_COMPACTED,
+        session_id="s1",
+        run_id="r2",
+        turn_id="t2",
+        payload={"status": "failed", "messages_compacted": 0, "tokens_before": 41000},
+    )
+
+    renderer.on_event(compacted)
+    renderer.on_event(failed)
+
+    text = output.getvalue()
+    assert "上下文已自动压缩" in text
+    assert "12" in text
+    assert "压缩失败" in text
+
+
 def test_approval_port_reads_yes() -> None:
     output = io.StringIO()
     input_stream = io.StringIO("y\n")

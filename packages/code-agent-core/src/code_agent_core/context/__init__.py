@@ -1,5 +1,6 @@
 """Context construction from session branches."""
 
+from .compaction import CompactionOutcome, CompactionPolicy, Compactor
 from .manager import (
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TOKEN_BUDGET,
@@ -12,6 +13,9 @@ from .manager import (
 )
 
 __all__ = [
+    "Compactor",
+    "CompactionOutcome",
+    "CompactionPolicy",
     "ContextManager",
     "ContextPolicy",
     "ContextView",

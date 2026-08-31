@@ -72,6 +72,17 @@ class ContextManager:
             )
         history = [entry.message for entry in self._session.messages()]
         history.extend(extra_messages)
+        compaction = self._session.latest_compaction()
+        if compaction is not None:
+            payload, covered = compaction
+            history = history[covered:]
+            messages.append(
+                Message(
+                    id="context-summary",
+                    role=MessageRole.SYSTEM,
+                    content=f"以下是本会话较早对话的摘要：\n{payload.summary}",
+                )
+            )
         messages.extend(self._trim(history))
         return ModelRequest(messages=tuple(messages), model=model, tools=tools)
 
@@ -90,7 +101,7 @@ class ContextManager:
             kept.append(message)
             total += cost
         kept.reverse()
-        return tuple(kept)
+        return tuple(_align_to_turn_boundary(kept))
 
 
 def load_project_instructions(workspace: Path) -> str | None:
@@ -102,6 +113,21 @@ def load_project_instructions(workspace: Path) -> str | None:
         return instructions_path.read_text(encoding="utf-8")
     except OSError:
         return None
+
+
+def _align_to_turn_boundary(messages: list[Message]) -> list[Message]:
+    """Drop leading orphaned assistant/tool messages after trimming.
+
+    A trimmed history must start at a user message: otherwise the leading
+    tool result would reference an assistant tool call that is no longer
+    present, which the model API rejects.
+    """
+    start = 0
+    while start < len(messages) and messages[start].role is not MessageRole.USER:
+        start += 1
+    if 0 < start < len(messages):
+        return messages[start:]
+    return messages
 
 
 class ContextView(ProtocolModel):

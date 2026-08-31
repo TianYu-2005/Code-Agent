@@ -11,6 +11,7 @@ from code_agent_core import (
     ToolRegistry,
 )
 from code_agent_core.context import (
+    Compactor,
     ContextManager,
     ContextPolicy,
     load_project_instructions,
@@ -56,6 +57,7 @@ class AgentRuntime:
                 RetryPolicy(),
             )
         self.provider = provider
+        self.compactor = Compactor(provider)
 
         self.registry = ToolRegistry()
         for tool in default_coding_tools():
@@ -108,4 +110,5 @@ class AgentRuntime:
             run_spec=self.run_spec,
             cancellation=self.cancel_state,
             event_sink=RecordingSink(self.renderer),
+            compactor=self.compactor,
         )

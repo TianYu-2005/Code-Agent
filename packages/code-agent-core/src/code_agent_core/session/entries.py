@@ -39,6 +39,7 @@ class CompactionEntryPayload(ProtocolModel):
     source_entry_ids: tuple[str, ...] = Field(min_length=1)
     branch_head_id: str = Field(min_length=1)
     model: str = Field(min_length=1)
+    content_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("source_entry_ids")
     @classmethod

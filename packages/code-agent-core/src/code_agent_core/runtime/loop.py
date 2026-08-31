@@ -20,6 +20,7 @@ from code_agent_llm import (
     ToolCall,
 )
 
+from ..context.compaction import Compactor
 from ..context.manager import ContextManager
 from ..session.entries import (
     MessageEntryPayload,
@@ -84,6 +85,7 @@ class AgentLoop:
         run_spec: RunSpec,
         cancellation: CancellationToken | None = None,
         event_sink: EventSink | None = None,
+        compactor: Compactor | None = None,
     ) -> None:
         self._provider = provider
         self._session = session
@@ -93,6 +95,7 @@ class AgentLoop:
         self._run_spec = run_spec
         self._cancellation = cancellation or _NeverCancel()
         self._event_sink = event_sink or _NullSink()
+        self._compactor = compactor
 
     async def run(self, user_message: Message) -> LoopResult:
         """Run the loop until the model finishes or a limit is reached."""
@@ -128,6 +131,9 @@ class AgentLoop:
     async def _run_turn(self, run_id: str, turn_number: int) -> LoopResult | None:
         turn = _TurnIds(turn_id=f"turn-{uuid.uuid4().hex[:12]}")
         await self._emit_event("turn_started", run_id=run_id, turn_id=turn.turn_id)
+
+        if self._compactor is not None:
+            await self._maybe_compact(run_id, turn.turn_id)
 
         request = self._context.build(
             self._run_spec.model,
@@ -207,6 +213,32 @@ class AgentLoop:
 
         await self._emit_event("turn_completed", run_id=run_id, turn_id=turn.turn_id)
         return None
+
+    async def _maybe_compact(self, run_id: str, turn_id: str) -> None:
+        """Run the compaction check and report the outcome as an event."""
+        if self._compactor is None:
+            return
+        outcome = await self._compactor.maybe_compact(
+            self._session,
+            token_budget=self._context.policy.token_budget,
+            model=self._run_spec.model,
+            cancellation=self._cancellation,
+        )
+        if outcome.status == "skipped":
+            return
+        payload: dict[str, object] = {
+            "status": outcome.status,
+            "messages_compacted": outcome.messages_compacted,
+            "tokens_before": outcome.tokens_before,
+        }
+        if outcome.reason:
+            payload["reason"] = outcome.reason
+        await self._emit_event(
+            "context_compacted",
+            run_id=run_id,
+            turn_id=turn_id,
+            payload=payload,
+        )
 
     async def _execute_tool_call(
         self,

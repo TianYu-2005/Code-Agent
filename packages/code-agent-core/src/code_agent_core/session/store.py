@@ -4,9 +4,11 @@ import json
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from .entries import (
+    CompactionEntryPayload,
     MessageEntryPayload,
     SessionEntry,
     SessionEntryType,
@@ -155,6 +157,29 @@ class SessionStore:
     def entries(self) -> Iterator[SessionEntry]:
         """Iterate stored entries in insertion order."""
         return iter(self._entries.values())
+
+    def latest_compaction(self) -> tuple[CompactionEntryPayload, int] | None:
+        """Return the newest compaction whose source range prefixes the current path.
+
+        The covered message count is returned alongside the payload so the
+        caller knows how many leading messages the summary replaces.
+        """
+        path_ids = [entry.id for entry in self.current_path()]
+        best: tuple[CompactionEntryPayload, int, datetime] | None = None
+        for entry in self._entries.values():
+            if entry.type is not SessionEntryType.COMPACTION:
+                continue
+            payload = entry.payload
+            if not isinstance(payload, CompactionEntryPayload):
+                continue
+            source = payload.source_entry_ids
+            if len(source) > len(path_ids) or tuple(path_ids[: len(source)]) != source:
+                continue
+            if best is None or entry.timestamp > best[2]:
+                best = (payload, len(source), entry.timestamp)
+        if best is None:
+            return None
+        return best[0], best[1]
 
 
 @dataclass

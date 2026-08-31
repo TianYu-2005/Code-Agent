@@ -1,10 +1,12 @@
 """Tests for workspace session persistence in the CLI."""
 
 import asyncio
+import io
 from pathlib import Path
 
 import pytest
 
+from code_agent.cli.renderer import TerminalRenderer
 from code_agent.cli.sessions import SessionManager, SessionManagerError
 from code_agent_core.session.store import SessionStore
 from code_agent_llm import Message, MessageRole
@@ -117,3 +119,47 @@ def test_runtime_binds_and_switches_sessions(
     contents = [p.message.content for p in runtime.session.messages()]
     assert "ping" in contents
     assert "pong" in contents
+
+
+def test_rewind_and_fork_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from code_agent.bootstrap import AgentRuntime
+    from code_agent.cli.app import _handle_fork, _handle_rewind
+    from code_agent.config import load_config
+    from code_agent_llm import FakeProvider, FinishReason, ModelResponse
+
+    provider = FakeProvider.from_responses(
+        [ModelResponse(content="ok", tool_calls=(), finish_reason=FinishReason.STOP)]
+    )
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+    config = load_config(workspace=str(tmp_path))
+    output = io.StringIO()
+    runtime = AgentRuntime(
+        config,
+        provider=provider,
+        renderer=TerminalRenderer(output_stream=output),
+    )
+
+    _append(runtime.session, "m1", MessageRole.USER, "first question")
+    _append(runtime.session, "m2", MessageRole.ASSISTANT, "first answer")
+    _append(runtime.session, "m3", MessageRole.USER, "second question")
+    _append(runtime.session, "m4", MessageRole.ASSISTANT, "second answer")
+
+    _handle_rewind(runtime, "2")
+    assert runtime.session.current_id == "m2"
+    assert "已回退" in output.getvalue()
+
+    # Continuing from the rewound point creates a new branch on the tree.
+    _append(runtime.session, "m5", MessageRole.USER, "new direction")
+    branches = runtime.session.list_branches()
+    assert len(branches) >= 2
+
+    _handle_fork(runtime, "1")
+    assert runtime.session.current_id == branches[0].head_id
+
+    _handle_rewind(runtime, "0")
+    assert "需在 1-3 之间" in output.getvalue()
+    _handle_rewind(runtime, "abc")
+    assert "最近消息" in output.getvalue()

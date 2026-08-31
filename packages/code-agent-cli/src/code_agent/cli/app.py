@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from code_agent_core.runtime.loop import LoopEndReason
+from code_agent_core.session.entries import MessageEntryPayload
 from code_agent_llm import Message, MessageRole
 
 from .commands import HELP_TEXT, CommandResult, parse_input
@@ -57,11 +58,75 @@ def _handle_command(runtime: "AgentRuntime", command: str, argument: str | None)
         if not branches:
             renderer.info("当前会话还没有消息。")
         else:
+            current_head = _current_head_id(runtime)
             for branch in branches:
-                renderer.info(f"  分支 {branch.head_id}: {branch.message_count} 条消息")
+                marker = "（当前）" if branch.head_id == current_head else ""
+                renderer.info(f"  分支 {branch.head_id}: {branch.message_count} 条消息{marker}")
+    elif command == "rewind":
+        _handle_rewind(runtime, argument)
+    elif command == "fork":
+        _handle_fork(runtime, argument)
     elif command == "unknown":
         renderer.info(f"未知命令: /{argument}\n{HELP_TEXT}")
     return True
+
+
+def _current_head_id(runtime: "AgentRuntime") -> str | None:
+    path = runtime.session.current_path()
+    return path[-1].id if path else None
+
+
+def _handle_rewind(runtime: "AgentRuntime", argument: str | None) -> None:
+    """Move the conversation head back by a number of messages."""
+    renderer = runtime.renderer
+    path = runtime.session.current_path()
+    if not path:
+        renderer.info("当前会话还没有消息。")
+        return
+    parts = (argument or "").split()
+    if not parts or not parts[0].isdigit():
+        renderer.info("当前分支最近消息（/rewind <n> 回退 n 条并从该点分叉）:")
+        start = max(0, len(path) - 8)
+        for index in range(len(path) - 1, start - 1, -1):
+            payload = path[index].payload
+            if not isinstance(payload, MessageEntryPayload):
+                continue
+            message = payload.message
+            preview = " ".join((message.content or "").split())[:30]
+            distance = len(path) - 1 - index + 1
+            renderer.info(f"  -{distance}: [{message.role.value}] {preview}")
+        return
+    steps = int(parts[0])
+    if steps < 1 or steps > len(path) - 1:
+        renderer.info(f"n 需在 1-{len(path) - 1} 之间。")
+        return
+    target = path[len(path) - 1 - steps]
+    runtime.session.rewind(target.id)
+    renderer.info(f"已回退 {steps} 条消息，后续对话将从该点分叉（原消息保留在树中）。")
+
+
+def _handle_fork(runtime: "AgentRuntime", argument: str | None) -> None:
+    """Switch the conversation head to another branch."""
+    renderer = runtime.renderer
+    branches = runtime.session.list_branches()
+    if not branches:
+        renderer.info("当前会话还没有消息。")
+        return
+    parts = (argument or "").split()
+    if not parts or not parts[0].isdigit():
+        current_head = _current_head_id(runtime)
+        renderer.info("分支列表（/fork <序号> 切换到该分支继续）:")
+        for index, branch in enumerate(branches, start=1):
+            marker = "（当前）" if branch.head_id == current_head else ""
+            renderer.info(f"  {index}. {branch.message_count} 条消息{marker}")
+        return
+    index = int(parts[0])
+    if index < 1 or index > len(branches):
+        renderer.info(f"序号需在 1-{len(branches)} 之间。")
+        return
+    branch = branches[index - 1]
+    runtime.session.fork(branch.head_id)
+    renderer.info(f"已切换到分支（{branch.message_count} 条消息），后续对话将从该分支继续。")
 
 
 def _session_by_index(runtime: "AgentRuntime", number: int) -> SessionSummary | None:

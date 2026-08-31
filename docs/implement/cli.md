@@ -77,6 +77,16 @@ CODE_AGENT_MAX_TURNS     默认 20
 
 `/sessions` 命令：无参数列出；`/sessions <序号>` 恢复（自动清理未使用的空会话文件）；`/sessions export <序号> [路径]` 导出。会话标题自动从首条消息生成，暂不提供重命名。恢复或新建会话后，组合根通过 `_rebind_session()` 重建 ContextManager 与 RunSpec（session_id 来自文件名）。
 
+## rewind / fork
+
+树状会话的终端入口：
+
+- `/rewind`：显示当前分支最近 8 条消息（`-n` 距今步数）；`/rewind <n>` 把对话头回退 n 条，后续对话从该点分叉，原消息保留在树中
+- `/fork`：列出分支（含当前标记）；`/fork <序号>` 切换到指定分支继续
+- `/tree`：显示分支头与消息数（标记当前分支）
+
+当前位置通过 `.head` sidecar 文件持久化：`SessionFileStore` 在每次 append / rewind / fork 后写入当前 head，重启恢复时若 `.head` 有效则优先采用——回退或分叉后重启不会丢失位置。本次同时修复了 `list_branches` 的存量缺陷：分支消息数此前只统计 head 自身，现改为从根到 head 的完整路径长度。
+
 ## 组合根
 
 `bootstrap.AgentRuntime` 是唯一允许同时依赖抽象和具体实现的组装点：

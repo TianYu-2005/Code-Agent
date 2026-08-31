@@ -126,38 +126,28 @@ class SessionStore:
         self._current_id = entry_id
 
     def list_branches(self) -> tuple[BranchInfo, ...]:
-        """List all branch heads grouped by their message count and update time."""
-        heads: dict[str, int] = {}
-        child_messages = {
-            parent: [
-                child for child in children if self._entries[child].type is SessionEntryType.MESSAGE
-            ]
+        """List all branch heads with their message counts and update times."""
+        parents_of_messages = {
+            parent
             for parent, children in self._children.items()
+            if any(self._entries[child].type is SessionEntryType.MESSAGE for child in children)
         }
-        for entry in self._entries.values():
-            if entry.type is SessionEntryType.MESSAGE:
-                children = child_messages.get(entry.id, [])
-                if not children:
-                    heads[entry.id] = 1
-                else:
-                    if entry.parent_id is not None:
-                        heads.pop(entry.parent_id, None)
-                    heads.pop(entry.id, None)
-                    for child in children:
-                        heads[child] = heads.get(child, 0)
         branches = []
-        for head_id in heads:
-            path = [
-                entry
-                for entry in self._entries.values()
-                if entry.type is SessionEntryType.MESSAGE
-                and _is_ancestor(self._entries, head_id, entry.id)
-            ]
+        for entry_id, entry in self._entries.items():
+            if entry.type is not SessionEntryType.MESSAGE or entry_id in parents_of_messages:
+                continue
+            count = 0
+            cursor: str | None = entry_id
+            while cursor is not None:
+                node = self._entries[cursor]
+                if node.type is SessionEntryType.MESSAGE:
+                    count += 1
+                cursor = node.parent_id
             branches.append(
                 BranchInfo(
-                    head_id=head_id,
-                    message_count=len(path),
-                    updated_at=max(entry.timestamp for entry in path).isoformat(),
+                    head_id=entry_id,
+                    message_count=count,
+                    updated_at=entry.timestamp.isoformat(),
                 )
             )
         return tuple(sorted(branches, key=lambda branch: branch.updated_at))
@@ -198,7 +188,28 @@ class SessionFileStore(SessionStore):
         with self._path.open("a", encoding="utf-8") as journal:
             journal.write(json.dumps(self._dump_entry(appended), ensure_ascii=False))
             journal.write("\n")
+        self._write_head()
         return appended
+
+    def rewind(self, entry_id: str) -> None:
+        """Move the head back and persist the new position."""
+        super().rewind(entry_id)
+        self._write_head()
+
+    def fork(self, entry_id: str) -> None:
+        """Move the head to a branch point and persist the new position."""
+        super().fork(entry_id)
+        self._write_head()
+
+    def _head_path(self) -> Path:
+        return self._path.with_suffix(".head")
+
+    def _write_head(self) -> None:
+        head = self._head_path()
+        if self._current_id is None:
+            head.unlink(missing_ok=True)
+            return
+        head.write_text(f"{self._current_id}\n", encoding="utf-8")
 
     def _load(self) -> None:
         if not self._path.exists():
@@ -223,6 +234,16 @@ class SessionFileStore(SessionStore):
             SessionStore.append(self, entry)
             if entry.type is SessionEntryType.MESSAGE:
                 self._current_id = entry.id
+        self._restore_head()
+
+    def _restore_head(self) -> None:
+        head = self._head_path()
+        if not head.exists():
+            return
+        head_id = head.read_text(encoding="utf-8").strip()
+        entry = self._entries.get(head_id)
+        if entry is not None and entry.type is SessionEntryType.MESSAGE:
+            self._current_id = head_id
 
     def _rewrite(self, entries: list[SessionEntry]) -> None:
         with self._path.open("w", encoding="utf-8") as journal:
@@ -247,19 +268,6 @@ def _nearest_message_ancestor(
             return entry.id
         cursor = entry.parent_id
     return None
-
-
-def _is_ancestor(
-    entries: dict[str, SessionEntry],
-    ancestor_id: str,
-    descendant_id: str,
-) -> bool:
-    cursor: str | None = descendant_id
-    while cursor is not None:
-        if cursor == ancestor_id:
-            return True
-        cursor = entries[cursor].parent_id
-    return False
 
 
 __all__ = [

@@ -27,7 +27,7 @@
 
 ### 持久化
 
-`SessionFileStore` 追加写 JSONL；恢复时逐行 `model_validate_json` 解析，遇到损坏行截断尾部并重写文件。恢复后可继续追加新对话。
+`SessionFileStore` 追加写 JSONL；恢复时逐行 `model_validate_json` 解析，遇到损坏行截断尾部并重写文件。恢复后可继续追加新对话。当前对话头位置写入 `<session>.head` sidecar 文件（append / rewind / fork 后更新），恢复时优先采用——回退或分叉后重启不丢失位置。
 
 ## Context
 

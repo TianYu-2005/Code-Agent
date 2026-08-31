@@ -133,6 +133,8 @@ def test_list_branches_reports_heads() -> None:
 
     head_ids = {branch.head_id for branch in branches}
     assert head_ids == {"m2", "m3"}
+    counts = {branch.head_id: branch.message_count for branch in branches}
+    assert counts == {"m2": 2, "m3": 2}
 
 
 def test_recovered_session_can_continue_conversation(tmp_path: Path) -> None:
@@ -175,3 +177,43 @@ def test_file_store_truncates_corrupt_tail(tmp_path: Path) -> None:
     assert len(lines) == 1
     with pytest.raises(ValidationError):
         SessionEntry.model_validate({"id": "broken"})
+
+
+def test_file_store_persists_rewound_head(tmp_path: Path) -> None:
+    journal = tmp_path / "session.jsonl"
+    session = SessionFileStore(journal)
+    session.append(entry("m1", None, user_message("m1", "hello")))
+    session.append(entry("m2", "m1", user_message("m2", "run tests")))
+    session.append(entry("m3", "m2", user_message("m3", "more")))
+
+    session.rewind("m2")
+
+    restored = SessionFileStore(journal)
+    assert restored.current_id == "m2"
+    assert [item.id for item in restored.current_path()] == ["m1", "m2"]
+
+
+def test_file_store_head_follows_new_messages_after_rewind(tmp_path: Path) -> None:
+    journal = tmp_path / "session.jsonl"
+    session = SessionFileStore(journal)
+    session.append(entry("m1", None, user_message("m1", "hello")))
+    session.append(entry("m2", "m1", user_message("m2", "run tests")))
+
+    session.rewind("m1")
+    session.append(entry("m3", "m1", user_message("m3", "new branch")))
+
+    restored = SessionFileStore(journal)
+    assert restored.current_id == "m3"
+    assert [item.id for item in restored.current_path()] == ["m1", "m3"]
+
+
+def test_file_store_persists_forked_head(tmp_path: Path) -> None:
+    journal = tmp_path / "session.jsonl"
+    session = SessionFileStore(journal)
+    session.append(entry("m1", None, user_message("m1", "hello")))
+    session.append(entry("m2", "m1", user_message("m2", "run tests")))
+
+    session.fork("m1")
+
+    restored = SessionFileStore(journal)
+    assert restored.current_id == "m1"

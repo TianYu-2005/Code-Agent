@@ -47,6 +47,7 @@ class AgentRuntime:
         renderer: TerminalRenderer | None = None,
         approval_port: ApprovalPort | None = None,
         event_sink: EventSink | None = None,
+        context_policy: ContextPolicy | None = None,
     ) -> None:
         self.config = config
         self.workspace = Path(config.workspace).resolve()
@@ -55,6 +56,7 @@ class AgentRuntime:
         self.renderer = renderer or TerminalRenderer()
         self.cancel_state = CancelState()
         self._event_sink = event_sink
+        self._context_policy = context_policy
 
         if provider is None:
             provider = RetryingProvider(
@@ -91,9 +93,22 @@ class AgentRuntime:
     def _rebind_session(self) -> None:
         """Rebuild context manager and run spec for the active session."""
         instructions = load_project_instructions(self.workspace)
-        policy = (
-            ContextPolicy(project_instructions=instructions) if instructions else ContextPolicy()
-        )
+        if self._context_policy is not None:
+            policy = (
+                ContextPolicy(
+                    system_prompt=self._context_policy.system_prompt,
+                    project_instructions=instructions,
+                    token_budget=self._context_policy.token_budget,
+                )
+                if instructions
+                else self._context_policy
+            )
+        else:
+            policy = (
+                ContextPolicy(project_instructions=instructions)
+                if instructions
+                else ContextPolicy()
+            )
         self.context_manager = ContextManager(self.session, policy=policy)
 
         session_id = getattr(self.session, "session_id", "default")

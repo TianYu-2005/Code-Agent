@@ -2,6 +2,16 @@
 
 from code_agent_llm.provider import CancellationToken
 
+from .context import (
+    DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_TOKEN_BUDGET,
+    ContextManager,
+    ContextPolicy,
+    ContextView,
+    describe_context,
+    estimate_tokens,
+    load_project_instructions,
+)
 from .events import RuntimeEvent, RuntimeEventType
 from .runtime import (
     EventSink,
@@ -18,6 +28,12 @@ from .session import (
     SessionEntry,
     SessionEntryType,
     SessionPayload,
+)
+from .session_store import (
+    BranchInfo,
+    SessionError,
+    SessionFileStore,
+    SessionStore,
 )
 from .tools import (
     MAX_TOOL_ARGUMENT_BYTES,
@@ -67,9 +83,15 @@ __all__ = [
     "ApprovalResponse",
     "ApprovalScope",
     "BoundedToolOutput",
+    "BranchInfo",
     "CancellationToken",
     "CompiledToolSchema",
     "CompactionEntryPayload",
+    "ContextManager",
+    "ContextPolicy",
+    "ContextView",
+    "DEFAULT_SYSTEM_PROMPT",
+    "DEFAULT_TOKEN_BUDGET",
     "DefaultPermissionPolicy",
     "DenyApprovalPort",
     "EventSink",
@@ -88,7 +110,10 @@ __all__ = [
     "RuntimeEventType",
     "SessionEntry",
     "SessionEntryType",
+    "SessionError",
+    "SessionFileStore",
     "SessionPayload",
+    "SessionStore",
     "Tool",
     "ToolAbortReason",
     "ToolConcurrencyController",
@@ -107,6 +132,9 @@ __all__ = [
     "ToolTerminationError",
     "ValidatedToolCall",
     "compile_schema",
+    "describe_context",
+    "estimate_tokens",
+    "load_project_instructions",
     "validate_arguments",
     "__version__",
 ]

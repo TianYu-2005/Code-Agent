@@ -154,6 +154,8 @@ class CodeAgentApp(App[None]):
                 summary = "已达到最大轮数限制，任务中止。"
             elif result.end_reason.value == "error":
                 summary = f"出错: {result.error}"
+            elif result.end_reason.value == "cancelled":
+                summary = "已取消。"
         except Exception as error:  # noqa: BLE001
             summary = f"运行失败: {error}"
         self.post_message(TaskFinished(summary))

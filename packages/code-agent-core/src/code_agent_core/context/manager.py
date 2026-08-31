@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from code_agent_llm import Message, MessageRole, ModelRequest, ProtocolModel
+from code_agent_llm import Message, MessageRole, ModelRequest, ModelToolSpec, ProtocolModel
 
 from ..session.store import SessionStore
 
@@ -47,7 +47,12 @@ class ContextManager:
         """Return the active context construction policy."""
         return self._policy
 
-    def build(self, model: str, extra_messages: tuple[Message, ...] = ()) -> ModelRequest:
+    def build(
+        self,
+        model: str,
+        extra_messages: tuple[Message, ...] = (),
+        tools: tuple[ModelToolSpec, ...] = (),
+    ) -> ModelRequest:
         """Assemble a model request without mutating the session."""
         messages: list[Message] = []
         messages.append(
@@ -68,7 +73,7 @@ class ContextManager:
         history = [entry.message for entry in self._session.messages()]
         history.extend(extra_messages)
         messages.extend(self._trim(history))
-        return ModelRequest(messages=tuple(messages), model=model)
+        return ModelRequest(messages=tuple(messages), model=model, tools=tools)
 
     def _trim(self, messages: list[Message]) -> tuple[Message, ...]:
         """Keep the most recent messages within the configured token budget."""

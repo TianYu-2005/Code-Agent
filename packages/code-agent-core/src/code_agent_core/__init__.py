@@ -12,13 +12,17 @@ from .context import (
     estimate_tokens,
     load_project_instructions,
 )
-from .events import RuntimeEvent, RuntimeEventType
 from .runtime import (
+    AgentLoop,
     EventSink,
     ExecutionContext,
+    LoopEndReason,
+    LoopResult,
     PermissionContext,
     RunBudgets,
     RunSpec,
+    RuntimeEvent,
+    RuntimeEventType,
 )
 from .session import (
     BranchInfo,
@@ -80,6 +84,7 @@ __all__ = [
     "ApprovalRequest",
     "ApprovalResponse",
     "ApprovalScope",
+    "AgentLoop",
     "BoundedToolOutput",
     "BranchInfo",
     "CancellationToken",
@@ -94,6 +99,8 @@ __all__ = [
     "DenyApprovalPort",
     "EventSink",
     "ExecutionContext",
+    "LoopEndReason",
+    "LoopResult",
     "MemoryEntryPayload",
     "MessageEntryPayload",
     "PermissionAction",

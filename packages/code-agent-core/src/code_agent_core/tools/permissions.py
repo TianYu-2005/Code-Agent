@@ -7,7 +7,7 @@ from pydantic import Field
 
 from code_agent_llm import ProtocolModel
 
-from ..runtime import ExecutionContext
+from ..runtime.spec import ExecutionContext
 from .base import ToolEffect, ToolOrigin, ToolSpec, ValidatedToolCall
 
 

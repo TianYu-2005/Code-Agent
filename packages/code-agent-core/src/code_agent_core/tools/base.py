@@ -9,7 +9,7 @@ from pydantic import Field, JsonValue, model_validator
 
 from code_agent_llm import ProtocolModel
 
-from ..runtime import ExecutionContext
+from ..runtime.spec import ExecutionContext
 
 MAX_TOOL_ARGUMENT_BYTES = 65_536
 MAX_TOOL_RESULT_CHARS = 32_768

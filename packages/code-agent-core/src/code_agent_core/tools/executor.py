@@ -11,7 +11,7 @@ from pydantic import JsonValue
 
 from code_agent_llm import ToolCall
 
-from ..runtime import ExecutionContext
+from ..runtime.spec import ExecutionContext
 from .base import (
     ToolAbortReason,
     ToolEffect,

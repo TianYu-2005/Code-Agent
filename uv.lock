@@ -69,12 +69,14 @@ source = { editable = "packages/code-agent-cli" }
 dependencies = [
     { name = "code-agent-core" },
     { name = "code-agent-llm" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "code-agent-core", editable = "packages/code-agent-core" },
     { name = "code-agent-llm", editable = "packages/code-agent-llm" },
+    { name = "pydantic", specifier = ">=2.11,<3" },
 ]
 
 [[package]]

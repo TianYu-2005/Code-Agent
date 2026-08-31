@@ -1,10 +1,10 @@
 /* Inline TUI layout: scrolling transcript above a fixed prompt area.
-   The height follows the terminal size (80vh), so the interface grows
-   and shrinks with the window instead of staying fixed. */
+   The Screen height is set dynamically in on_resize to track the
+   terminal size, so the interface grows and shrinks with the window. */
 
 Screen {
-    height: 80vh;
-    min-height: 14;
+    height: 30;
+    min-height: 12;
     layers: main approval;
 }
 

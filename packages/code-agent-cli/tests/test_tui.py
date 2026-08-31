@@ -144,7 +144,10 @@ def test_banner_and_speaker_labels(
     monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
 
     async def actions(pilot: Any) -> None:
-        assert "███████" in _log_text(app)  # ASCII-art banner present
+        text = _log_text(app)
+        assert "S E E C O D E R" in text  # banner name visible
+        assert "▓▓▓▓" in text  # heavy block border
+        assert text.count("▓") >= 20  # wide border, not a thin strip
         prompt = app.query_one("#prompt", Input)
         prompt.value = "ping"
         await pilot.press("enter")
@@ -178,15 +181,15 @@ def test_layout_follows_terminal_size(
     async def measure(size: tuple[int, int]) -> int:
         app = _build_app(tmp_path, [])
         async with app.run_test(size=size) as pilot:
+            await pilot.resize_terminal(size[0], size[1])
             await pilot.pause()
-            # The inline height is derived from the Screen CSS (80vh),
-            # so it tracks the terminal height instead of staying fixed.
-            return app._get_inline_height()
+            return app.screen.size.height
 
     heights.append(asyncio.run(measure((100, 40))))
     heights.append(asyncio.run(measure((100, 20))))
-    assert heights[0] >= 30
-    assert heights[1] <= 18
+    # The screen height tracks the terminal size minus a one-line footer.
+    assert heights[0] >= 35
+    assert heights[1] >= 17
     assert heights[0] > heights[1]
 
 

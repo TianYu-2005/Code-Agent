@@ -3,7 +3,10 @@ name = "code-agent-core"
 version = "0.1.0"
 description = "Provider-independent runtime for Code Agent"
 requires-python = ">=3.12"
-dependencies = ["code-agent-llm"]
+dependencies = [
+    "code-agent-llm",
+    "pydantic>=2.11,<3",
+]
 
 [tool.uv.sources]
 code-agent-llm = { workspace = true }

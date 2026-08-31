@@ -37,7 +37,7 @@ uv sync --all-packages
 | `CODE_AGENT_API_KEY` | 是 | 模型服务 API Key | — |
 | `CODE_AGENT_BASE_URL` | 否 | OpenAI 兼容服务地址 | `https://api.deepseek.com` |
 | `CODE_AGENT_MODEL` | 否 | 模型名称 | `deepseek-v4-flash` |
-| `CODE_AGENT_MAX_TURNS` | 否 | 单次任务最大循环轮数 | `20` |
+| `CODE_AGENT_MAX_TURNS` | 否 | 单次任务最大循环轮数 | `30` |
 
 最简配置：
 

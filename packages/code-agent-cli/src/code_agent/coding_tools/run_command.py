@@ -38,7 +38,7 @@ ALLOWED_ENV = {"PATH", "HOME", "LANG", "LC_ALL", "PYTHONDONTWRITEBYTECODE", "VIR
 class RunCommandTool:
     """Run a command with argv (no shell) inside the workspace."""
 
-    def __init__(self, *, timeout: float = 120.0) -> None:
+    def __init__(self, *, timeout: float = 30.0) -> None:
         self.spec: ToolSpec = spec_for(
             "run_command",
             "Run a shell command as argv (no shell) with a timeout; use for tests and builds.",

@@ -56,7 +56,7 @@ def load_config(workspace: str | None = None) -> AppConfig:
     base_url = os.environ.get("CODE_AGENT_BASE_URL", "").strip() or DEFAULT_BASE_URL
     model = os.environ.get("CODE_AGENT_MODEL", "").strip() or DEFAULT_MODEL
     resolved_workspace = workspace or os.getcwd()
-    max_turns = int(os.environ.get("CODE_AGENT_MAX_TURNS", "20"))
+    max_turns = int(os.environ.get("CODE_AGENT_MAX_TURNS", "30"))
     if max_turns < 1:
         raise ConfigError("CODE_AGENT_MAX_TURNS must be a positive integer")
     return AppConfig(

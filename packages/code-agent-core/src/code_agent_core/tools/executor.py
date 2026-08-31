@@ -112,12 +112,16 @@ class ToolExecutor:
         if status is ToolStatus.SUCCESS:
             if value is None:
                 return _result(ToolStatus.ERROR, "tool approval returned no response")
-            return value
+            if isinstance(value, ApprovalResponse):
+                return value
+            return _result(ToolStatus.ERROR, str(value))
         if status is ToolStatus.TIMEOUT:
             return _result(ToolStatus.DENIED, "tool approval timed out")
         if status is ToolStatus.CANCELLED:
             return _result(ToolStatus.CANCELLED, "tool approval was cancelled")
-        return _result(ToolStatus.ERROR, "tool approval failed")
+        return _result(
+            ToolStatus.ERROR, str(value) if isinstance(value, str) else "tool approval failed"
+        )
 
     async def _execute_authorized(
         self,
@@ -146,13 +150,14 @@ class ToolExecutor:
             if not isinstance(value, ToolOutcome):
                 return _result(ToolStatus.ERROR, "tool returned an invalid outcome")
             return output.result(value)
+        message = value if isinstance(value, str) else "tool execution failed"
         if status is ToolStatus.ERROR:
-            return _result(ToolStatus.ERROR, "tool execution failed")
+            return _result(ToolStatus.ERROR, message)
         if status is ToolStatus.TIMEOUT:
-            return _result(ToolStatus.TIMEOUT, "tool execution timed out")
+            return _result(ToolStatus.TIMEOUT, message or "tool execution timed out")
         if status is ToolStatus.CANCELLED:
-            return _result(ToolStatus.CANCELLED, "tool execution was cancelled")
-        return _result(ToolStatus.ERROR, "tool execution failed")
+            return _result(ToolStatus.CANCELLED, message or "tool execution was cancelled")
+        return _result(ToolStatus.ERROR, message or "tool execution failed")
 
     async def _abort(
         self,
@@ -226,7 +231,7 @@ async def _race[T](
     timeout_seconds: float,
     on_interrupt: Callable[[ToolAbortReason], Awaitable[None]] | None = None,
     termination_timeout_seconds: float = 2.0,
-) -> tuple[ToolStatus, T | None]:
+) -> tuple[ToolStatus, T | str | None]:
     if context.cancellation.is_cancelled:
         if asyncio.iscoroutine(operation):
             operation.close()
@@ -242,16 +247,16 @@ async def _race[T](
         )
         if operation_task in done:
             if operation_task.cancelled():
-                return ToolStatus.ERROR, None
+                return ToolStatus.ERROR, "operation was cancelled"
             try:
                 return ToolStatus.SUCCESS, await operation_task
             except asyncio.CancelledError:
                 current = asyncio.current_task()
                 if current is not None and current.cancelling():
                     raise
-                return ToolStatus.ERROR, None
-            except Exception:
-                return ToolStatus.ERROR, None
+                return ToolStatus.ERROR, "operation was cancelled"
+            except Exception as exc:
+                return ToolStatus.ERROR, f"{type(exc).__name__}: {exc}"
         interrupted = ToolStatus.CANCELLED if cancellation_task in done else ToolStatus.TIMEOUT
         reason = (
             ToolAbortReason.CANCELLED

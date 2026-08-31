@@ -23,7 +23,7 @@ class EventSink(Protocol):
 class RunBudgets(ProtocolModel):
     """Limits applied to one agent run."""
 
-    max_turns: int = Field(default=20, ge=1)
+    max_turns: int = Field(default=30, ge=1)
     timeout_seconds: float = Field(default=900.0, gt=0)
     max_input_tokens: int | None = Field(default=None, ge=1)
     max_output_tokens: int | None = Field(default=None, ge=1)

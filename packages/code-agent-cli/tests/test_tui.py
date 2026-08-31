@@ -164,6 +164,109 @@ def test_assistant_reply_renders_markdown(
     asyncio.run(_drive(app, actions))
 
 
+def test_agent_label_renders_above_markdown_body(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from code_agent_llm import FinishReason, ModelResponse
+
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+
+    async def actions(pilot: Any) -> None:
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "go"
+        await pilot.press("enter")
+        await _wait_for(lambda: not app._task_running and "first sentence" in _log_text(app))
+        text = _log_text(app)
+        assert "Agent" in text
+        # The reply body is still rendered through Markdown (assertions
+        # below are safe checks for non-leaking markdown markers).
+        assert "first sentence" in text
+        assert "**details**" not in text
+
+    app = _build_app(
+        tmp_path,
+        [
+            [
+                _event(
+                    "completed",
+                    ModelResponse(
+                        content="first sentence with details.\n\nSecond paragraph here.",
+                        finish_reason=FinishReason.STOP,
+                    ),
+                )
+            ]
+        ],
+    )
+    asyncio.run(_drive(app, actions))
+
+
+def test_tool_error_displays_failure_content(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from code_agent_llm import FinishReason, ModelResponse, ToolCall
+
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+
+    async def actions(pilot: Any) -> None:
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "go"
+        await pilot.press("enter")
+        await _wait_for(lambda: app._pending_approval is not None)
+        await pilot.press("y")
+        await _wait_for(lambda: not app._task_running, timeout=2)
+        text = _log_text(app)
+        assert "run_command" in text
+        assert "boom message" in text
+
+    from typing import cast
+
+    from code_agent.coding_tools.run_command import RunCommandTool
+    from code_agent_core.runtime.spec import ExecutionContext
+    from code_agent_core.tools.base import ToolOutputSink, ValidatedToolCall
+
+    real_execute = RunCommandTool.execute
+
+    async def failing_execute(
+        self: RunCommandTool,
+        call: ValidatedToolCall,
+        context: ExecutionContext,
+        output: ToolOutputSink,
+    ) -> None:
+        # Raise so the executor surfaces the failure with a status of ERROR
+        # and content captured from the exception message.
+        raise RuntimeError("boom message here")
+
+    RunCommandTool.execute = cast("Any", failing_execute)  # type: ignore[method-assign]
+    print("PATCHED?", RunCommandTool.execute.__name__, RunCommandTool.execute.__qualname__)
+    try:
+        app = _build_app(
+            tmp_path,
+            [
+                [
+                    _event(
+                        "completed",
+                        ModelResponse(
+                            content="执行",
+                            tool_calls=(
+                                ToolCall(
+                                    id="call-1",
+                                    name="run_command",
+                                    arguments_json='{"command": ["true"]}',
+                                ),
+                            ),
+                            finish_reason=FinishReason.TOOL_CALLS,
+                        ),
+                    )
+                ]
+            ],
+        )
+        asyncio.run(_drive(app, actions))
+    finally:
+        RunCommandTool.execute = real_execute  # type: ignore[method-assign]
+
+
 def test_banner_and_speaker_labels(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

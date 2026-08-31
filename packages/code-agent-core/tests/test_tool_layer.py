@@ -573,14 +573,17 @@ def test_unstoppable_abort_hook_raises_fatal_error(tmp_path: Path) -> None:
         asyncio.run(executor.execute(make_call(), make_context(tmp_path)))
 
 
-def test_executor_sanitizes_errors_and_bounds_output(tmp_path: Path) -> None:
+def test_executor_surfaces_errors_and_bounds_output(tmp_path: Path) -> None:
     failing = TestTool(fail=True)
     failure = asyncio.run(make_executor(failing).execute(make_call(), make_context(tmp_path)))
     large = TestTool(text="x" * 100_000, metadata={"large": "y" * 100_000})
     bounded = asyncio.run(make_executor(large).execute(make_call(), make_context(tmp_path)))
 
     assert failure.status is ToolStatus.ERROR
-    assert "secret" not in failure.content
+    # The exception class name and message are surfaced so callers can
+    # diagnose failures (the tool itself is responsible for not leaking
+    # secrets in exception messages).
+    assert "secret" in failure.content
     assert bounded.status is ToolStatus.SUCCESS
     assert bounded.metadata["truncated"] is True
     assert len(bounded.content.encode()) < 100_000

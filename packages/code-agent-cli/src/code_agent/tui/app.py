@@ -7,18 +7,13 @@ import uuid
 from typing import TYPE_CHECKING
 
 import pyfiglet
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 from textual import events, on
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Input, RichLog, Static
-
-import pyfiglet
-from rich.console import Group
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.text import Text
 
 from .messages import AgentEvent, ApprovalAsked, TaskFinished
 from .renderer import TuiApprovalPort, TuiRenderer
@@ -194,12 +189,20 @@ class CodeAgentApp(App[None]):
             self._set_status(f"执行工具 {name}…")
         elif kind == "tool_completed":
             status = str(payload.get("status", "success"))
+            name = str(payload.get("tool", "工具"))
+            arguments = str(payload.get("arguments", ""))
+            content = str(payload.get("content", ""))
             icon, color = TOOL_STATUS.get(status, ("·", "white"))
             self._transcript(Text(""))
-            line = Text("  ▸ ", style="dim")
-            line.append(icon, style=color)
-            line.append(f" {status}", style="dim")
-            self._transcript(line)
+            header = Text()
+            header.append("  ▸ ", style="dim")
+            header.append(f"{name} ", style="bold cyan")
+            header.append(icon, style=color)
+            header.append(f" {status}", style=color)
+            header.append(f"  {arguments}", style="dim")
+            self._transcript(header)
+            if content and status in {"error", "timeout", "denied"}:
+                self._transcript_tool_error(content)
         elif kind == "context_compacted":
             self._transcript(Text(""))
             if str(payload.get("status")) == "failed":
@@ -398,12 +401,17 @@ class CodeAgentApp(App[None]):
         log = self.query_one("#transcript", RichLog)
         log.write(Text(""))
         label, style = ASSISTANT_STYLE
-        # The reply is rendered as Markdown so headings, lists, **bold**,
-        # `code` and links display with proper styling instead of raw
-        # source markers. The colored speaker label sits above the body.
-        header = Text(f"{label} ", style=style)
-        body = Markdown(text, code_theme="native", hyperlinks=True)
-        log.write(Group(header, body))
+        # The speaker label sits on its own colored bold line above the
+        # Markdown-rendered reply (headings, lists, **bold**, `code`,
+        # links) so all markdown formatting displays correctly.
+        log.write(Text(f"{label} ", style=style))
+        log.write(Markdown(text, code_theme="native", hyperlinks=True))
+
+    def _transcript_tool_error(self, content: str) -> None:
+        """Show tool failure content as an indented Markdown code block."""
+        log = self.query_one("#transcript", RichLog)
+        preview = content.strip() or "(无内容)"
+        log.write(Markdown(f"```\n{preview}\n```", code_theme="native"))
 
     def _set_status(self, status: str) -> None:
         assert self._runtime is not None

@@ -278,7 +278,11 @@ class AgentLoop:
             run_id=run_id,
             turn_id=turn.turn_id,
             tool_call_id=tool_call_id,
-            payload={"status": result.status.value},
+            payload={
+                "status": result.status.value,
+                "tool": call.name,
+                "content": result.content,
+            },
         )
         if result.status is ToolStatus.CANCELLED:
             return LoopResult(

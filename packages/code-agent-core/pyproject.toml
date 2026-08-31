@@ -5,7 +5,9 @@ description = "Provider-independent runtime for Code Agent"
 requires-python = ">=3.12"
 dependencies = [
     "code-agent-llm",
+    "jsonschema>=4.25,<5",
     "pydantic>=2.11,<3",
+    "referencing>=0.37,<1",
 ]
 
 [tool.uv.sources]

@@ -145,9 +145,10 @@ def test_banner_and_speaker_labels(
 
     async def actions(pilot: Any) -> None:
         text = _log_text(app)
-        assert "S E E C O D E R" in text  # banner name visible
-        assert "▓▓▓▓" in text  # heavy block border
-        assert text.count("▓") >= 20  # wide border, not a thin strip
+        assert "Welcome to SeeCoder" in text  # framed welcome line
+        assert "S E E C O D E R" not in text  # no spaced fallback anymore
+        # pyfiglet Big font wraps each letter with underscores/slashes.
+        assert "/" in text and "\\" in text
         prompt = app.query_one("#prompt", Input)
         prompt.value = "ping"
         await pilot.press("enter")

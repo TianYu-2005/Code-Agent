@@ -6,6 +6,8 @@ import asyncio
 import uuid
 from typing import TYPE_CHECKING
 
+import pyfiglet
+from rich.panel import Panel
 from rich.text import Text
 from textual import events, on
 from textual.app import App, ComposeResult
@@ -30,10 +32,17 @@ HELP_TEXT = """可用命令:
 
 其他输入会作为任务发送给 Agent。Ctrl+C 取消当前运行。"""
 
-BANNER_TOP = "▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓"
-BANNER_NAME = "  S E E C O D E R  "
-BANNER_BOTTOM = "▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓"
-BANNER_GRADIENT = ("bold bright_cyan", "bold bright_white on blue", "bold bright_magenta")
+BANNER_LOGO_ART = pyfiglet.figlet_format("SEECODER", font="Big", width=200).rstrip("\n")
+BANNER_LINE_STYLES = (
+    "bright_cyan",
+    "cyan",
+    "bright_blue",
+    "blue",
+    "bright_magenta",
+    "magenta",
+    "bright_red",
+)
+WELCOME_LINE = "✱ Welcome to SeeCoder preview!"
 
 TOOL_STATUS = {
     "success": ("✓", "green"),
@@ -78,9 +87,17 @@ class CodeAgentApp(App[None]):
         assert self._runtime is not None
         model = self._runtime.config.model
         log = self.query_one("#transcript", RichLog)
-        log.write(Text(BANNER_TOP, style=BANNER_GRADIENT[0]))
-        log.write(Text(BANNER_NAME, style=BANNER_GRADIENT[1]))
-        log.write(Text(BANNER_BOTTOM, style=BANNER_GRADIENT[2]))
+        # Welcome banner — Claude Code-style framed welcome text on top.
+        log.write(
+            Panel(
+                Text(WELCOME_LINE, style="bold"),
+                border_style="cyan",
+                padding=(0, 2),
+            )
+        )
+        # ASCII-art logo, one color per row for a gradient feel.
+        for line, style in zip(BANNER_LOGO_ART.splitlines(), BANNER_LINE_STYLES, strict=False):
+            log.write(Text(line, style=style))
         log.write(Text(""))
         log.write(Text(f"  {model} · /help 查看命令 · Ctrl+C 取消运行", style="dim"))
         log.write(Text(""))

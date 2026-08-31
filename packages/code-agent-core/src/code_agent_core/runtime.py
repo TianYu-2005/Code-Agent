@@ -7,21 +7,9 @@ from typing import Protocol
 from pydantic import Field, JsonValue, field_validator
 
 from code_agent_llm import ProtocolModel
+from code_agent_llm.provider import CancellationToken
 
 from .events import RuntimeEvent
-
-
-class CancellationToken(Protocol):
-    """Cooperative cancellation capability passed to runtime components."""
-
-    @property
-    def is_cancelled(self) -> bool:
-        """Return whether cancellation has been requested."""
-        ...
-
-    async def wait(self) -> None:
-        """Wait until cancellation is requested."""
-        ...
 
 
 class EventSink(Protocol):

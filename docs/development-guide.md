@@ -51,7 +51,7 @@ SessionEntry
 要求：
 
 - 类型不依赖具体 Provider SDK。
-- `ToolCall.arguments` 在进入 Runtime 后必须转换为已验证结构。
+- `ToolCall.arguments_json` 保留模型原始参数；进入 Runtime 后由 `ToolExecutor` 解析并转换为已验证结构。
 - `SessionEntry` 从第一版开始包含 `id`、`parent_id` 和 `schema_version`。
 - `RuntimeEvent` 从第一版开始包含 `session_id`、`run_id` 和关联调用 ID。
 

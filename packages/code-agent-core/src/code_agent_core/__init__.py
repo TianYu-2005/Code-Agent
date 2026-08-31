@@ -1,8 +1,9 @@
 """Provider-independent runtime for Code Agent."""
 
+from code_agent_llm.provider import CancellationToken
+
 from .events import RuntimeEvent, RuntimeEventType
 from .runtime import (
-    CancellationToken,
     EventSink,
     ExecutionContext,
     PermissionContext,

@@ -176,7 +176,7 @@ Message
 ToolCall
 - id
 - name
-- arguments
+- arguments_json（模型返回的原始参数，由 ToolExecutor 校验）
 
 ModelRequest
 - messages

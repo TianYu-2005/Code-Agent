@@ -64,7 +64,7 @@ class ToolCall(ProtocolModel):
 
     id: str = Field(min_length=1)
     name: str = Field(min_length=1, pattern=r"^[A-Za-z][A-Za-z0-9_.-]*$")
-    arguments: dict[str, JsonValue] = Field(default_factory=dict)
+    arguments_json: str = "{}"
 
 
 class ModelToolSpec(ProtocolModel):

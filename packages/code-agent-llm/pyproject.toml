@@ -3,7 +3,10 @@ name = "code-agent-llm"
 version = "0.1.0"
 description = "Model provider boundary for Code Agent"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2.11,<3"]
+dependencies = [
+    "openai>=2.8,<3",
+    "pydantic>=2.11,<3",
+]
 
 [build-system]
 requires = ["hatchling"]

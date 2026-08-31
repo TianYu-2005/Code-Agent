@@ -1,7 +1,5 @@
-from typing import cast
-
 import pytest
-from pydantic import JsonValue, ValidationError
+from pydantic import ValidationError
 
 from code_agent_llm import (
     FinishReason,
@@ -23,7 +21,7 @@ def make_tool_call(call_id: str = "call-1") -> ToolCall:
     return ToolCall(
         id=call_id,
         name="read_file",
-        arguments={"path": "README.md", "options": {"line": 1}},
+        arguments_json='{"path":"README.md","options":{"line":1}}',
     )
 
 
@@ -70,38 +68,27 @@ def test_protocol_models_are_strict_and_forbid_extra_fields() -> None:
         Message.model_validate({"id": "message-1", "role": "user"})
     with pytest.raises(ValidationError, match="Extra inputs"):
         ToolCall.model_validate(
-            {"id": "call-1", "name": "read_file", "arguments": {}, "unknown": True}
+            {
+                "id": "call-1",
+                "name": "read_file",
+                "arguments_json": "{}",
+                "unknown": True,
+            }
         )
 
 
-def test_protocol_models_are_deeply_frozen() -> None:
-    tool_call = ToolCall(
-        id="call-1",
-        name="read_file",
-        arguments={"paths": ["README.md"], "options": {"line": 1}},
-    )
-    paths = cast(list[JsonValue], tool_call.arguments["paths"])
-    nested = cast(dict[str, JsonValue], tool_call.arguments["options"])
+def test_protocol_models_are_frozen() -> None:
+    tool_call = make_tool_call()
 
-    assert isinstance(paths, list)
     with pytest.raises(ValidationError, match="frozen"):
         tool_call.name = "write_file"
-    with pytest.raises(TypeError, match="cannot be modified"):
-        tool_call.arguments["path"] = "/etc/passwd"
-    with pytest.raises(TypeError, match="cannot be modified"):
-        paths.append("secrets.env")
-    with pytest.raises(TypeError, match="cannot be modified"):
-        nested["line"] = 2
 
     restored = ToolCall.model_validate_json(tool_call.model_dump_json())
-    assert isinstance(restored.arguments["paths"], list)
     assert restored == tool_call
 
 
-def test_protocol_models_reject_non_finite_json_numbers() -> None:
+def test_protocol_models_reject_non_finite_generation_numbers() -> None:
     for number in (float("nan"), float("inf"), float("-inf")):
-        with pytest.raises(ValidationError):
-            ToolCall(id="call-1", name="read_file", arguments={"number": number})
         with pytest.raises(ValidationError):
             GenerationConfig(temperature=number)
 

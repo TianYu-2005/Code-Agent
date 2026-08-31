@@ -78,14 +78,18 @@ def _rebuild_runtime(runtime: "AgentRuntime") -> None:
 
 async def run_app(runtime: "AgentRuntime") -> None:
     """Run the interactive REPL until the user quits."""
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.formatted_text import ANSI
+
     renderer = runtime.renderer
     renderer.banner(str(runtime.workspace), runtime.config.model)
+    session: PromptSession[str] = PromptSession()
     while True:
         try:
             renderer.info("")
-            # Keep the prompt plain: ANSI escapes break readline cursor math
-            # and make backspace behave incorrectly on some terminals.
-            user_input = input("你> ").strip()
+            # prompt_toolkit manages the terminal itself: wide characters,
+            # ANSI styling, history, and line editing all behave correctly.
+            user_input = (await session.prompt_async(ANSI("\033[1m你> \033[0m"))).strip()
         except (EOFError, KeyboardInterrupt):
             renderer.info("\n再见。")
             return

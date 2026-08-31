@@ -27,7 +27,7 @@ class TerminalApprovalPort:
         lines.append(f"  说明: {description}")
         for target in targets:
             lines.append(f"  目标: {target.resource} ({target.effect.value})")
-        self._output.write("\n".join(lines) + "\n")
+        self._output.write("\n" + "\n".join(lines) + "\n")
         while True:
             self._output.write("允许执行？[y]允许 [a]本会话允许 [n]拒绝: ")
             self._output.flush()

@@ -8,8 +8,7 @@
 
 | 模块 | 职责 |
 |---|---|
-| `cli/app.py` | REPL 主循环：读取输入、分发命令、运行 AgentLoop |
-| `cli/renderer.py` | `RuntimeEvent` → 终端输出（流式文本、工具状态着色） |
+| `cli/app.py` | REPL 主循环：读取输入、分发命令、运行 AgentLoop || `cli/renderer.py` | `RuntimeEvent` → 终端输出（流式文本、工具状态着色） |
 | `cli/approval.py` | `ApprovalPort` 终端实现（y/a/n 交互） |
 | `cli/commands.py` | 斜杠命令解析（/help /new /model /tree /quit 等） |
 | `cli/interrupt.py` | SIGINT → `CancellationToken` |
@@ -53,6 +52,16 @@ CODE_AGENT_MAX_TURNS     默认 20
 - 不直接访问 Session、Provider 或工具
 
 这保证了按设计文档的承诺：换成 TUI 时只需提供新的 Renderer 和 ApprovalPort，核心层零改动。
+
+## 行编辑
+
+输入行由 `prompt_toolkit` 驱动（`PromptSession.prompt_async`）：
+
+- 宽字符（中文）与 ANSI 样式的列宽计算正确，退格/光标移动不卡壳；
+- 内置历史记录（↑/↓ 翻阅）与标准行编辑快捷键；
+- `MODEL_STARTED` 事件渲染为换行，回车提交后立即有视觉反馈，首个流式 token 到达前不再静默。
+
+此前裸 `input()` 依赖终端 readline：提示符中的 ANSI 转义与宽字符都会被误算列宽，导致退格删除错位、行编辑状态混乱。
 
 ## 组合根
 

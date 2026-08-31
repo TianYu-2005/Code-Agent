@@ -40,6 +40,7 @@ class TerminalRenderer:
                 self._output.flush()
         elif event.type is RuntimeEventType.MODEL_STARTED:
             self._current_tool = None
+            self._output.write("\n")
         elif event.type is RuntimeEventType.TOOL_STARTED:
             self._begin_tool(event)
         elif event.type is RuntimeEventType.TOOL_COMPLETED:

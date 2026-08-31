@@ -102,6 +102,16 @@ def test_renderer_streams_delta_and_tool_status() -> None:
     assert "hello" in text
     assert "success" in text
 
+    started = RuntimeEvent(
+        type=RuntimeEventType.MODEL_STARTED,
+        session_id="s1",
+        run_id="r2",
+        turn_id="t2",
+        model_call_id="m2",
+    )
+    renderer.on_event(started)
+    assert output.getvalue().endswith("\n")
+
 
 def test_approval_port_reads_yes() -> None:
     output = io.StringIO()

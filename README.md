@@ -71,7 +71,7 @@ api_key = "ollama"           # 缺省沿用顶层 api_key
 | `CODE_AGENT_API_KEY` | `--api-key` | 模型服务 API Key | — |
 | `CODE_AGENT_BASE_URL` | `--base-url` | OpenAI 兼容服务地址 | `https://api.deepseek.com` |
 | `CODE_AGENT_MODEL` | `--model` | 模型名称或 profile 名 | `deepseek-v4-flash` |
-| `CODE_AGENT_MAX_TURNS` | — | 单次任务最大循环轮数 | `30` |
+| `CODE_AGENT_MAX_TURNS` | — | 单次任务最大循环轮数 | `100` |
 | `CODE_AGENT_HOME` | — | 全局配置目录 | `~/.code-agent` |
 
 ```bash

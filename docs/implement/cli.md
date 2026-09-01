@@ -27,7 +27,7 @@
 CODE_AGENT_API_KEY       必填（或配置文件/向导提供）
 CODE_AGENT_BASE_URL      默认 https://api.deepseek.com
 CODE_AGENT_MODEL         默认 deepseek-v4-flash
-CODE_AGENT_MAX_TURNS     默认 30
+CODE_AGENT_MAX_TURNS     默认 100
 CODE_AGENT_HOME          全局配置目录，默认 ~/.code-agent
 ```
 

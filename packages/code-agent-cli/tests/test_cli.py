@@ -11,6 +11,12 @@ from code_agent.cli.renderer import TerminalRenderer
 from code_agent.config import ConfigError, load_config
 
 
+@pytest.fixture(autouse=True)
+def _isolated_config_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep tests away from a real ~/.code-agent/config.toml."""
+    monkeypatch.setenv("CODE_AGENT_HOME", str(tmp_path / "config-home"))
+
+
 def test_parse_input_chat_vs_commands() -> None:
     chat = parse_input("fix the bug in main.py")
     quit_cmd = parse_input("/quit")

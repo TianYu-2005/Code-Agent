@@ -25,7 +25,7 @@ from code_agent_llm import OpenAICompatibleConfig
 DEFAULT_MODEL = "deepseek-v4-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEFAULT_MAX_TURNS = 30
+DEFAULT_MAX_TURNS = 100
 
 ENV_API_KEY = "CODE_AGENT_API_KEY"
 ENV_BASE_URL = "CODE_AGENT_BASE_URL"

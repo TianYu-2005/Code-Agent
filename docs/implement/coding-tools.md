@@ -2,7 +2,7 @@
 
 ## 目标
 
-`code-agent-cli` 的 `coding_tools/` 提供设计文档定义的全部 8 个内置编程工具。所有工具实现 core 的 `Tool` 协议，经 `ToolRegistry` 注册后由 `ToolExecutor` 统一执行——参数校验、权限审批、超时和取消都不在工具内重复实现。
+`code-agent-cli` 的 `coding_tools/` 提供 12 个内置编程工具（原 8 个文件/Git/命令工具 + 4 个后台进程工具）。所有工具实现 core 的 `Tool` 协议，经 `ToolRegistry` 注册后由 `ToolExecutor` 统一执行——参数校验、权限审批、超时和取消都不在工具内重复实现。
 
 ## 工具清单
 
@@ -25,7 +25,9 @@
 - `is_sensitive` 识别 `.env`、`id_rsa`、`credentials.json` 等敏感文件名，标记后由权限策略拒绝
 - `ensure_text_file` 拒绝超过 2MB 或二进制（含 NUL 字节）的文件
 
-命令工具不使用 shell 字符串，只接受 `argv` 数组；子进程环境变量使用 allowlist（`PATH`、`HOME` 等），不继承 API Key；独立进程组使超时和取消能杀掉整个进程树。
+命令工具不直接执行普通 shell 字符串，只接受 `argv` 数组；子进程环境变量使用 allowlist（`PATH`、`HOME` 等），不继承 API Key；独立进程组使超时、取消或 stop 能终止整个进程树。针对模型偶发输出的双重序列化形式（如 `"[\"npm\",\"install\"]"`），工具仅在其能严格解析为非空字符串数组时自动规范化；普通命令字符串仍拒绝并返回带字段路径、期望类型和实际类型的诊断。
+
+`run_command` 用于会结束的安装、构建和测试任务；默认 30 秒，调用参数 `timeout_seconds` 可提高至 600 秒，`cwd` 可指定工作区内子目录。长期服务必须通过 `start_process` 启动，其 stdout/stderr 写入 `.code-agent/processes/<id>.log`，并由其余三个进程工具管理。进程注册表绑定当前 Agent 进程，重启 Agent 后旧 process ID 不再可管理，但操作系统进程与日志不会被自动删除。
 
 文件写入统一采用"临时文件 + `fsync` + `os.replace`"的原子写模式，写入失败不会留下半成品文件。
 
@@ -49,7 +51,8 @@
 - `search_text`：正则匹配、非法正则报错
 - `replace_in_file`：唯一匹配替换、多重匹配拒绝
 - `write_file`：嵌套目录创建
-- `run_command`：成功执行、非零退出码上报
+- `run_command`：成功执行、非零退出返回 error、JSON 编码 argv 自动修复、类型诊断、cwd、单次超时覆盖
+- 后台进程：start → status → read output → stop 完整生命周期与日志忽略规则
 - `git_status` / `git_diff`：真实 git 仓库中的状态和差异
 - 敏感文件识别
-- 全部 8 个工具可注册进同一 Registry
+- 全部 12 个工具可注册进同一 Registry

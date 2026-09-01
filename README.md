@@ -6,7 +6,7 @@
 
 - **inline TUI**：Textual 驱动的默认界面（Claude Code 同款形态），滚动对话流 + 流式回复 + 审批面板 + 状态栏；`--cli` 可切回经典命令行
 - **ReAct Agent Loop**：多轮「请求模型 → 执行工具 → 请求模型」直至任务完成
-- **8 个内置 Coding Tools**：读文件、写文件、编辑、搜索、列目录、执行命令、Git 状态、Git diff
+- **12 个内置 Coding Tools**：读/写/编辑/搜索文件、有限命令、后台进程生命周期、Git 状态与 diff
 - **权限审批**：写操作需人工确认，支持单次允许 / 本会话允许 / 拒绝
 - **树状会话**：完整对话树保留所有分支，支持回退（rewind）与切换（fork）
 - **会话持久化**：对话自动落盘到工作区，重启后可列出、恢复、导出历史会话
@@ -126,6 +126,15 @@ uv run --project /path/to/Code-Agent code-agent
 
 这条指令会完整走一遍 `write_file`（触发审批）→ `run_command` 执行 → 模型总结的闭环。
 
+执行有限任务时使用 `run_command`。它默认超时 30 秒，安装依赖、构建或长测试可由 Agent 通过 `timeout_seconds` 将单次超时提高到最多 600 秒。启动开发服务器等常驻任务时，Agent 会改用后台进程工具：
+
+- `start_process`：启动服务并立即返回 process ID、PID 和日志路径
+- `process_status`：查询运行状态与退出码
+- `read_process_output`：读取最近的服务日志
+- `stop_process`：停止服务进程组
+
+后台日志保存在 `<workspace>/.code-agent/processes/`，并自动加入 `.gitignore`。后台 process ID 在当前 Agent 进程内有效。
+
 ### 工具审批
 
 Agent 执行写操作（写文件、执行命令等）时会弹出审批面板（TUI）或行内提示（CLI）：
@@ -192,7 +201,7 @@ Agent 执行写操作（写文件、执行命令等）时会弹出审批面板�
 packages/
 ├── code-agent-llm/    # 模型层：Provider 协议、OpenAI 兼容适配、重试、FakeProvider
 ├── code-agent-core/   # 核心层：tools / session / context / runtime（Agent Loop + 压缩）
-└── code-agent-cli/    # 应用层：TUI 与 CLI 双入口、审批、渲染、8 个 Coding Tools
+└── code-agent-cli/    # 应用层：TUI 与 CLI 双入口、审批、渲染、12 个 Coding Tools
 ```
 
 分层依赖方向：`cli → core → llm`。核心层只发出 `RuntimeEvent`、不感知任何终端细节——TUI 与 CLI 是同一组合根的两个可替换外壳。

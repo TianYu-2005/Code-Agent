@@ -101,6 +101,28 @@ class ToolOutputSink(Protocol):
 
 
 @runtime_checkable
+class ToolArgumentNormalizer(Protocol):
+    """Optional hook for repairing narrowly defined model argument mistakes."""
+
+    def normalize_arguments_json(self, arguments_json: str) -> str:
+        """Return normalized JSON before schema validation."""
+        ...
+
+
+@runtime_checkable
+class ToolTimeoutResolver(Protocol):
+    """Optional hook for choosing a timeout from validated arguments."""
+
+    def resolve_timeout_seconds(
+        self,
+        arguments: Mapping[str, JsonValue],
+        default: float,
+    ) -> float:
+        """Return the timeout for one validated invocation."""
+        ...
+
+
+@runtime_checkable
 class Tool(Protocol):
     """Executable capability; authorization remains ToolExecutor's responsibility."""
 

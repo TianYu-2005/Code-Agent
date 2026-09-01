@@ -201,6 +201,35 @@ def test_loop_stops_at_max_turns() -> None:
     assert result.turns == 3
 
 
+def test_loop_stops_after_three_equivalent_tool_failures() -> None:
+    scripts = [
+        [
+            ModelEvent(
+                type=ModelEventType.COMPLETED,
+                response=ModelResponse(
+                    tool_calls=(
+                        ToolCall(
+                            id=f"bad-{index}",
+                            name="echo",
+                            arguments_json='{"wrong":"value"}',
+                        ),
+                    ),
+                    finish_reason=FinishReason.TOOL_CALLS,
+                ),
+            )
+        ]
+        for index in range(3)
+    ]
+    loop, echo = make_loop(scripts, max_turns=10)
+
+    result = asyncio.run(loop.run(Message(id="m1", role=MessageRole.USER, content="task")))
+
+    assert result.end_reason is LoopEndReason.ERROR
+    assert result.error is not None
+    assert "failed three consecutive times" in result.error
+    assert echo.executions == 0
+
+
 def test_loop_reports_provider_error() -> None:
     error = ModelProviderError(
         ProviderErrorCode.AUTHENTICATION,

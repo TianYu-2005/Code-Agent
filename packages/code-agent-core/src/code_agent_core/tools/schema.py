@@ -119,9 +119,45 @@ def validate_arguments(
     try:
         _validate_json_tree(value, depth=0, nodes=[0])
         compiled.validator.validate(value)
-    except (ToolSchemaError, ValidationError, Unresolvable, RecursionError, ValueError):
+    except ValidationError as error:
+        return {}, _format_validation_error(error)
+    except (ToolSchemaError, Unresolvable, RecursionError, ValueError):
         return {}, "tool arguments do not match the input schema"
     return value, None
+
+
+def _format_validation_error(error: ValidationError) -> str:
+    """Return a concise, value-free schema diagnostic that models can correct."""
+    path = ".".join(str(part) for part in error.absolute_path) or "arguments"
+    actual = _json_type_name(error.instance)
+    if error.validator == "type":
+        expected = error.validator_value
+        if isinstance(expected, list):
+            expected_text = " or ".join(str(item) for item in expected)
+        else:
+            expected_text = str(expected)
+        return f"tool argument '{path}' must be {expected_text}, but received {actual}"
+    if error.validator == "required":
+        return f"tool arguments are missing a required field: {error.message}"
+    if error.validator == "additionalProperties":
+        return f"tool arguments contain an unsupported field: {error.message}"
+    return f"tool argument '{path}' does not match the input schema: {error.message}"
+
+
+def _json_type_name(value: object) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, int | float):
+        return "number"
+    return type(value).__name__
 
 
 def _reject_constant(value: str) -> NoReturn:

@@ -14,11 +14,13 @@ from code_agent_llm import ToolCall
 from ..runtime.spec import ExecutionContext
 from .base import (
     ToolAbortReason,
+    ToolArgumentNormalizer,
     ToolEffect,
     ToolOutcome,
     ToolResult,
     ToolStatus,
     ToolTarget,
+    ToolTimeoutResolver,
     ValidatedToolCall,
 )
 from .concurrency import ToolConcurrencyController
@@ -70,6 +72,14 @@ class ToolExecutor:
             registered = self._registry.get(call.name)
         except ToolRegistryError:
             return _result(ToolStatus.ERROR, "unknown tool")
+
+        if isinstance(registered.tool, ToolArgumentNormalizer):
+            try:
+                normalized = registered.tool.normalize_arguments_json(call.arguments_json)
+            except (TypeError, ValueError) as error:
+                return _result(ToolStatus.ERROR, f"tool argument normalization failed: {error}")
+            if normalized != call.arguments_json:
+                call = call.model_copy(update={"arguments_json": normalized})
 
         arguments, validation_error = validate_arguments(call, registered.schema)
         if validation_error is not None:
@@ -139,10 +149,22 @@ class ToolExecutor:
         async def interrupt(reason: ToolAbortReason) -> None:
             await self._abort(registered, call, context, reason)
 
+        timeout_seconds = registered.spec.timeout_seconds
+        if isinstance(registered.tool, ToolTimeoutResolver):
+            try:
+                timeout_seconds = registered.tool.resolve_timeout_seconds(
+                    call.arguments,
+                    timeout_seconds,
+                )
+            except (TypeError, ValueError) as error:
+                return _result(ToolStatus.ERROR, f"invalid tool timeout: {error}")
+            if not isfinite(timeout_seconds) or timeout_seconds <= 0 or timeout_seconds > 3_600:
+                return _result(ToolStatus.ERROR, "tool timeout must be between 0 and 3600 seconds")
+
         status, value = await _race(
             run(),
             context,
-            timeout_seconds=registered.spec.timeout_seconds,
+            timeout_seconds=timeout_seconds,
             on_interrupt=interrupt,
             termination_timeout_seconds=self._abort_timeout,
         )

@@ -53,9 +53,9 @@ Loop 自身不做参数校验、权限判断或上下文裁剪，全部委托给
 | `COMPLETED` | 模型返回无 tool_calls 的最终回答 |
 | `MAX_TURNS` | 达到 `RunBudgets.max_turns` |
 | `CANCELLED` | CancellationToken 触发或模型请求被取消 |
-| `ERROR` | Provider 错误或流式响应异常 |
+| `ERROR` | Provider 错误、流式响应异常，或同一工具连续 3 次返回相同错误 |
 
-每个 ToolCall 保证有配对的 tool 消息写入 Session，即使工具被拒绝或执行失败。
+每个 ToolCall 保证有配对的 tool 消息写入 Session，即使工具被拒绝或执行失败。工具的 error/timeout/denied 结果会作为 tool 消息反馈给模型，允许其修正参数或改用其他策略；若同一工具连续 3 次得到相同状态与错误内容，Loop 主动停止，避免模型在不可恢复错误上耗尽全部轮数。
 
 ## 测试
 
@@ -65,5 +65,6 @@ Loop 自身不做参数校验、权限判断或上下文裁剪，全部委托给
 - 请求工具 → 执行 → 二轮给出回答的完整闭环
 - Session 中消息顺序和 `tool_call_id` 配对正确
 - 达到 `max_turns` 时停止并报告
+- 同一工具连续 3 次返回相同错误时提前停止
 - Provider 错误归类为 `ERROR`
 - 生命周期事件按序发出（run/turn/model/tool 的 started 和 completed）

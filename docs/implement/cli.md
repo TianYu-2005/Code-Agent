@@ -25,7 +25,7 @@
 CODE_AGENT_API_KEY       必填
 CODE_AGENT_BASE_URL      默认 https://api.deepseek.com
 CODE_AGENT_MODEL         默认 deepseek-v4-flash
-CODE_AGENT_MAX_TURNS     默认 20
+CODE_AGENT_MAX_TURNS     默认 30
 ```
 
 默认值按 [DeepSeek API 文档](https://api-docs.deepseek.com/zh-cn/) 对齐：只设置 API Key 即可直连 DeepSeek。`base_url` 的域名会自动加入 Provider 的可信主机列表，满足模型层的 SSRF 防护要求。
@@ -92,7 +92,7 @@ CODE_AGENT_MAX_TURNS     默认 20
 `bootstrap.AgentRuntime` 是唯一允许同时依赖抽象和具体实现的组装点：
 
 - 创建 `RetryingProvider(OpenAICompatibleProvider)`
-- 注册全部 8 个内置 Coding Tools
+- 注册全部 12 个内置 Coding Tools（含后台进程生命周期工具）
 - 加载 `AGENTS.md` 项目指令进 ContextPolicy
 - 绑定 `TerminalApprovalPort` 和 `CancelState`
 
@@ -105,5 +105,5 @@ CODE_AGENT_MAX_TURNS     默认 20
 - 渲染器：流式文本、工具状态、banner
 - 审批端口：y 确认、输入流可注入
 - 取消状态：信号状态转换
-- 组合根冒烟：8 个工具装配、Loop 创建成功
+- 组合根冒烟：12 个工具装配、Loop 创建成功
 - 会话持久化：创建（含 .gitignore）、列出/恢复/导出往返、空会话清理、非法 ID 拒绝、组合根绑定与切换会话

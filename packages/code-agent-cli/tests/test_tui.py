@@ -239,7 +239,6 @@ def test_tool_error_displays_failure_content(
         raise RuntimeError("boom message here")
 
     RunCommandTool.execute = cast("Any", failing_execute)  # type: ignore[method-assign]
-    print("PATCHED?", RunCommandTool.execute.__name__, RunCommandTool.execute.__qualname__)
     try:
         app = _build_app(
             tmp_path,

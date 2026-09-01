@@ -96,10 +96,14 @@ class AgentLoop:
         self._cancellation = cancellation or _NeverCancel()
         self._event_sink = event_sink or _NullSink()
         self._compactor = compactor
+        self._last_failure: tuple[str, str, str] | None = None
+        self._repeated_failures = 0
 
     async def run(self, user_message: Message) -> LoopResult:
         """Run the loop until the model finishes or a limit is reached."""
         run_id = f"run-{uuid.uuid4().hex[:12]}"
+        self._last_failure = None
+        self._repeated_failures = 0
         self._session.append(_message_entry(user_message, parent_id=self._session.current_id))
         await self._emit_event("run_started", run_id=run_id)
 
@@ -254,7 +258,10 @@ class AgentLoop:
             run_id=run_id,
             turn_id=turn.turn_id,
             tool_call_id=tool_call_id,
-            payload={"tool": call.name},
+            payload={
+                "tool": call.name,
+                "arguments": _display_arguments(call.arguments_json),
+            },
         )
 
         context = ExecutionContext(
@@ -281,9 +288,17 @@ class AgentLoop:
             payload={
                 "status": result.status.value,
                 "tool": call.name,
+                "arguments": _display_arguments(call.arguments_json),
                 "content": result.content,
             },
         )
+        repeated = self._track_tool_result(call, result)
+        if repeated is not None:
+            return LoopResult(
+                end_reason=LoopEndReason.ERROR,
+                turns=0,
+                error=repeated,
+            )
         if result.status is ToolStatus.CANCELLED:
             return LoopResult(
                 end_reason=LoopEndReason.CANCELLED,
@@ -291,6 +306,27 @@ class AgentLoop:
                 error="tool execution was cancelled",
             )
         return None
+
+    def _track_tool_result(self, call: ToolCall, result: ToolResult) -> str | None:
+        """Stop after three consecutive equivalent failures from one tool."""
+        if result.status is ToolStatus.SUCCESS:
+            self._last_failure = None
+            self._repeated_failures = 0
+            return None
+        if result.status is ToolStatus.CANCELLED:
+            return None
+        signature = (call.name, result.status.value, result.content)
+        if signature == self._last_failure:
+            self._repeated_failures += 1
+        else:
+            self._last_failure = signature
+            self._repeated_failures = 1
+        if self._repeated_failures < 3:
+            return None
+        return (
+            f"tool '{call.name}' failed three consecutive times with the same error: "
+            f"{result.content}"
+        )
 
     async def _emit_event(
         self,
@@ -336,6 +372,12 @@ class _NullSink:
 
 def _workspace_root() -> Path:
     return Path.cwd()
+
+
+def _display_arguments(arguments_json: str, limit: int = 300) -> str:
+    """Bound raw model arguments before including them in UI events."""
+    compact = " ".join(arguments_json.split())
+    return compact if len(compact) <= limit else f"{compact[:limit]}…"
 
 
 def _message_entry(message: Message, *, parent_id: str | None) -> SessionEntry:

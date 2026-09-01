@@ -3,21 +3,31 @@
 import asyncio
 import os
 from collections.abc import Mapping
-from typing import Any
+from pathlib import Path
+from typing import cast
 
 from pydantic import JsonValue
 
 from code_agent_core import (
     ToolEffect,
     ToolOutcome,
+    ToolOutputSink,
     ToolSpec,
     ToolTarget,
     ValidatedToolCall,
 )
 from code_agent_core.runtime.spec import ExecutionContext
 
-from .common import command_target, spec_for
-from .workspace import WorkspaceError
+from .common import (
+    command_environment,
+    command_target,
+    normalize_argv_field,
+    spec_for,
+)
+from .workspace import WorkspaceError, resolve_workspace_path
+
+DEFAULT_TIMEOUT_SECONDS = 30.0
+MAX_TIMEOUT_SECONDS = 600
 
 SCHEMA: dict[str, JsonValue] = {
     "type": "object",
@@ -25,23 +35,46 @@ SCHEMA: dict[str, JsonValue] = {
         "command": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Command and arguments to run (argv, no shell)",
+            "minItems": 1,
+            "description": (
+                "Command argv as a JSON array of strings, never a shell string. "
+                'Example: ["npm", "install"].'
+            ),
+        },
+        "cwd": {
+            "type": "string",
+            "description": "Optional workspace-relative working directory",
+        },
+        "timeout_seconds": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": MAX_TIMEOUT_SECONDS,
+            "description": (
+                "Per-call timeout. Defaults to 30 seconds; use a larger value for installs, "
+                "builds, and test suites. Do not use this tool for persistent servers."
+            ),
         },
     },
     "required": ["command"],
     "additionalProperties": False,
 }
 
-ALLOWED_ENV = {"PATH", "HOME", "LANG", "LC_ALL", "PYTHONDONTWRITEBYTECODE", "VIRTUAL_ENV"}
+
+class CommandExecutionError(RuntimeError):
+    """Raised when a command exits unsuccessfully."""
 
 
 class RunCommandTool:
-    """Run a command with argv (no shell) inside the workspace."""
+    """Run a finite command as argv inside the workspace."""
 
-    def __init__(self, *, timeout: float = 30.0) -> None:
+    def __init__(self, *, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> None:
         self.spec: ToolSpec = spec_for(
             "run_command",
-            "Run a shell command as argv (no shell) with a timeout; use for tests and builds.",
+            (
+                "Run a finite command as argv (no shell) for tests, builds, and installs. "
+                'Pass command as an array, e.g. {"command":["npm","install"]}. '
+                "Use start_process for persistent development servers."
+            ),
             SCHEMA,
             effects=frozenset({ToolEffect.EXECUTE}),
             timeout=timeout,
@@ -49,30 +82,45 @@ class RunCommandTool:
         )
         self._process: asyncio.subprocess.Process | None = None
 
+    def normalize_arguments_json(self, arguments_json: str) -> str:
+        """Repair a model-generated JSON string containing an encoded argv array."""
+        return normalize_argv_field(arguments_json)
+
+    def resolve_timeout_seconds(
+        self,
+        arguments: Mapping[str, JsonValue],
+        default: float,
+    ) -> float:
+        """Use the validated per-call timeout when supplied."""
+        value = arguments.get("timeout_seconds")
+        return (
+            float(value)
+            if isinstance(value, int | float) and not isinstance(value, bool)
+            else default
+        )
+
     def resolve_targets(
         self,
         arguments: Mapping[str, JsonValue],
         context: ExecutionContext,
     ) -> tuple[ToolTarget, ...]:
         argv = self._argv(arguments)
-        if not argv:
-            from .workspace import WorkspaceError
-
-            raise WorkspaceError("command must not be empty")
-        return (command_target(tuple(argv)),)
+        cwd = self._cwd(arguments, context)
+        target = command_target(tuple(argv))
+        return (target.model_copy(update={"resource": f"{target.resource} (cwd: {cwd})"}),)
 
     async def execute(
         self,
         call: ValidatedToolCall,
         context: ExecutionContext,
-        output: Any,
+        output: ToolOutputSink,
     ) -> ToolOutcome:
         argv = self._argv(call.arguments)
-        env = {key: os.environ[key] for key in ALLOWED_ENV if key in os.environ}
+        cwd = self._cwd(call.arguments, context)
         self._process = await asyncio.create_subprocess_exec(
             *argv,
-            cwd=context.workspace,
-            env=env,
+            cwd=cwd,
+            env=command_environment(),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             start_new_session=True,
@@ -81,22 +129,34 @@ class RunCommandTool:
         exit_code = self._process.returncode or 0
         text = stdout.decode("utf-8", errors="replace")
         tail = text[-4000:] if len(text) > 4000 else text
-        output.write(f"$ {' '.join(argv)}\n{tail}\n[exit code: {exit_code}]\n")
-        return ToolOutcome(metadata={"exit_code": exit_code})
+        transcript = f"$ {' '.join(argv)}\n{tail}\n[exit code: {exit_code}]\n"
+        if exit_code != 0:
+            raise CommandExecutionError(transcript)
+        output.write(transcript)
+        return ToolOutcome(metadata={"exit_code": exit_code, "cwd": str(cwd)})
 
     @staticmethod
     def _argv(arguments: Mapping[str, JsonValue]) -> list[str]:
-        """Extract a string argv list from validated arguments."""
         raw = arguments.get("command")
-        if not isinstance(raw, list):
-            raise WorkspaceError("command must be an array of strings")
-        return [str(item) for item in raw]
+        if not isinstance(raw, list) or not raw or not all(isinstance(item, str) for item in raw):
+            raise WorkspaceError("command must be a non-empty array of strings")
+        return list(cast(list[str], raw))
+
+    @staticmethod
+    def _cwd(arguments: Mapping[str, JsonValue], context: ExecutionContext) -> Path:
+        raw = arguments.get("cwd", ".")
+        if not isinstance(raw, str):
+            raise WorkspaceError("cwd must be a workspace-relative string")
+        path = resolve_workspace_path(raw, context.workspace)
+        if not path.is_dir():
+            raise WorkspaceError(f"command working directory does not exist: {raw}")
+        return path
 
     async def abort(
         self,
         call: ValidatedToolCall,
         context: ExecutionContext,
-        reason: Any,
+        reason: object,
     ) -> None:
         if self._process is not None and self._process.returncode is None:
             try:

@@ -54,6 +54,9 @@ Screen {
 #prompt {
     dock: bottom;
     margin: 0 1 0 1;
+    /* Input defaults to a fixed height of 3; explicit auto lets the
+       vertical padding grow the widget instead of clipping the text. */
+    height: auto;
     padding: 1 2;
     border: round $accent-darken-1;
     background: $boost;

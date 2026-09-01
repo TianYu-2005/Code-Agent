@@ -345,6 +345,32 @@ def test_user_turn_renders_separator_and_marker(
     asyncio.run(_drive(app, actions))
 
 
+def test_typed_input_stays_visible(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Regression: #prompt padding must not shrink the content area to zero.
+
+    Input defaults to a fixed height of 3; vertical padding without an
+    explicit ``height: auto`` clipped the text row entirely (typed
+    characters were invisible until submitted).
+    """
+
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+
+    async def actions(pilot: Any) -> None:
+        prompt = app.query_one("#prompt", Input)
+        assert prompt.content_region.height >= 1
+        prompt.value = "xyzzy"
+        await pilot.pause()
+        # The typed text must appear in the rendered screen. Use a single
+        # token: the SVG export encodes spaces as non-breaking characters.
+        assert "xyzzy" in app.export_screenshot()
+
+    app = _build_app(tmp_path, [])
+    asyncio.run(_drive(app, actions))
+
+
 def test_tool_result_renders_compact_summary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -4,10 +4,12 @@
 
 ## 功能特性
 
-- **inline TUI**：Textual 驱动的默认界面（Claude Code 同款形态），滚动对话流 + 流式回复 + 审批面板 + 状态栏；`--cli` 可切回经典命令行
+- **inline TUI**：Textual 驱动的默认界面（Claude Code 同款形态），滚动对话流 + 流式回复 + 审批面板 + 状态栏（模型 · 审批模式 · 工作目录）；`--cli` 可切回经典命令行
 - **ReAct Agent Loop**：多轮「请求模型 → 执行工具 → 请求模型」直至任务完成
 - **12 个内置 Coding Tools**：读/写/编辑/搜索文件、有限命令、后台进程生命周期、Git 状态与 diff
-- **权限审批**：写操作需人工确认，支持单次允许 / 本会话允许 / 拒绝
+- **权限审批**：写操作默认人工确认（单次 / 本会话 / 拒绝），支持 Shift+Tab 一键切换 auto 模式
+- **灵活配置**：首次启动向导 + 全局/项目 TOML 配置文件 + 环境变量 + 命令行参数，四层优先级
+- **运行时切换模型**：`/model` 在内置 preset 与自定义 profile（多 endpoint）之间即时切换
 - **树状会话**：完整对话树保留所有分支，支持回退（rewind）与切换（fork）
 - **会话持久化**：对话自动落盘到工作区，重启后可列出、恢复、导出历史会话
 - **自动上下文压缩**：接近 token 预算时自动把旧消息摘要成总结，保留最近完整轮次，模型不"失忆"
@@ -30,33 +32,56 @@ uv sync --all-packages
 
 ## 配置
 
-通过环境变量配置，无需配置文件。默认开箱即用 DeepSeek，只需设置 API Key：
+支持三种配置方式，优先级从高到低：**命令行参数 > 环境变量 > 项目配置 > 全局配置 > 默认值**。
 
-| 环境变量 | 必填 | 说明 | 默认值 |
+### 方式一：首次启动向导（推荐）
+
+第一次启动时若未检测到 API Key，会自动进入交互式引导，依次输入 Key / Endpoint / 模型名，保存后以后启动无需再设置：
+
+```text
+未检测到 API Key，开始首次配置（保存到 ~/.code-agent/config.toml）
+API Key (例如 sk-...): sk-xxxx
+Base URL [https://api.deepseek.com]:
+Model [deepseek-v4-flash]:
+配置已保存到 ~/.code-agent/config.toml
+```
+
+### 方式二：配置文件
+
+- **全局配置**：`~/.code-agent/config.toml`（跨项目共享，权限自动设为 600）
+- **项目配置**：`<workspace>/.code-agent/config.toml`（仅当前项目生效，覆盖全局）
+
+```toml
+api_key = "sk-xxxx"
+base_url = "https://api.deepseek.com"
+model = "deepseek-v4-flash"
+approval_mode = "ask"        # ask（逐次审批，默认） | auto（自动放行）
+
+# 可选：声明多个模型 profile，供 /model 命令切换
+[profiles.local-ollama]
+base_url = "http://localhost:11434/v1"
+model = "qwen2.5-coder:32b"
+api_key = "ollama"           # 缺省沿用顶层 api_key
+```
+
+### 方式三：环境变量 / 命令行参数
+
+| 环境变量 | 命令行参数 | 说明 | 默认值 |
 |---|---|---|---|
-| `CODE_AGENT_API_KEY` | 是 | 模型服务 API Key | — |
-| `CODE_AGENT_BASE_URL` | 否 | OpenAI 兼容服务地址 | `https://api.deepseek.com` |
-| `CODE_AGENT_MODEL` | 否 | 模型名称 | `deepseek-v4-flash` |
-| `CODE_AGENT_MAX_TURNS` | 否 | 单次任务最大循环轮数 | `30` |
-
-最简配置：
-
-```bash
-export CODE_AGENT_API_KEY="sk-xxxx"
-```
-
-DeepSeek 可用模型（参见 [DeepSeek API 文档](https://api-docs.deepseek.com/zh-cn/)）：
-
-- `deepseek-v4-flash` — 旗舰轻量模型（默认）
-- `deepseek-v4-pro` — 更强推理能力
-- `deepseek-v4-flash-vision-exp` — 实验性，支持图片输入
-
-接入其他 OpenAI 兼容服务时，覆盖 base_url 和 model 即可：
+| `CODE_AGENT_API_KEY` | `--api-key` | 模型服务 API Key | — |
+| `CODE_AGENT_BASE_URL` | `--base-url` | OpenAI 兼容服务地址 | `https://api.deepseek.com` |
+| `CODE_AGENT_MODEL` | `--model` | 模型名称或 profile 名 | `deepseek-v4-flash` |
+| `CODE_AGENT_MAX_TURNS` | — | 单次任务最大循环轮数 | `30` |
+| `CODE_AGENT_HOME` | — | 全局配置目录 | `~/.code-agent` |
 
 ```bash
-export CODE_AGENT_BASE_URL="https://your-service.com/v1"
-export CODE_AGENT_MODEL="your-model"
+code-agent --model deepseek-reasoner        # 临时切换模型
+code-agent --api-key sk-xxxx --base-url https://your-service.com/v1
 ```
+
+内置模型 profile：`deepseek-v4-flash`（默认）/ `deepseek-v4` / `deepseek-reasoner`。运行中可用 `/model` 查看、`/model <名称>` 随时切换（跨 endpoint 的 profile 会自动重建连接）。
+
+接入其他 OpenAI 兼容服务（vLLM、Ollama、OpenRouter 等）时，在配置文件中加一个 `[profiles.xxx]` 段或直接覆盖 base_url 即可。
 
 API Key 从 [DeepSeek 开放平台](https://platform.deepseek.com/api_keys) 获取。
 
@@ -92,7 +117,7 @@ uv run --project /path/to/Code-Agent code-agent
 └─────────────────────────────────────┘
 ```
 
-**TUI 操作**：回车提交任务、`y/a/n` 应答审批、`Ctrl+C` 取消运行（空闲时退出）、`↑/↓` 翻阅输入历史。
+**TUI 操作**：回车提交任务、`y/a/n` 应答审批、`Shift+Tab` 切换审批模式（ask ↔ auto）、`Ctrl+C` 取消运行（空闲时退出）、`↑/↓` 翻阅输入历史。
 
 切换经典 CLI 交互：
 
@@ -137,11 +162,13 @@ uv run --project /path/to/Code-Agent code-agent
 
 ### 工具审批
 
-Agent 执行写操作（写文件、执行命令等）时会弹出审批面板（TUI）或行内提示（CLI）：
+Agent 执行写操作（写文件、执行命令等）时默认弹出审批面板（TUI）或行内提示（CLI）：
 
 - `y` — 仅允许本次
 - `a` — 本会话内允许该工具的所有调用
 - `n` — 拒绝，Agent 会收到拒绝结果并调整策略
+
+**auto 模式**：不需要逐次确认时，按 `Shift+Tab` 或执行 `/permissions auto` 切换为自动放行，工具调用不再中断；状态栏会显示当前模式（`ask` / `auto`），随时可切回。策略级拒绝（如越界路径）在 auto 模式下依然生效。也可在配置文件中设置 `approval_mode = "auto"` 作为默认值。
 
 ### 斜杠命令
 
@@ -149,7 +176,8 @@ Agent 执行写操作（写文件、执行命令等）时会弹出审批面板�
 |---|---|
 | `/help` | 显示帮助 |
 | `/new` | 开始新会话（自动持久化） |
-| `/model` | 显示当前模型和 endpoint |
+| `/model` | 列出可用模型；`/model <名称>` 切换模型或 profile |
+| `/permissions` | 查看审批模式；`/permissions [ask\|auto]` 切换 |
 | `/sessions` | 列出历史会话；`/sessions <序号>` 恢复；`/sessions export <序号>` 导出 Markdown |
 | `/tree` | 显示当前对话树的分支结构 |
 | `/rewind` | 预览最近消息；`/rewind <n>` 回退 n 条并从该点分叉 |

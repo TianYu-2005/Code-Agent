@@ -10,6 +10,7 @@ dependencies = [
     "pydantic>=2.11,<3",
     "pyfiglet>=1.0.4",
     "textual>=8.2.8",
+    "tomli-w>=1.0,<2",
 ]
 
 [tool.uv.sources]

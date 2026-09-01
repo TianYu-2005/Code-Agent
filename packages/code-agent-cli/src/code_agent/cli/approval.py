@@ -3,8 +3,10 @@
 import sys
 from typing import TextIO
 
-from code_agent_core import ApprovalRequest, ApprovalResponse
+from code_agent_core import ApprovalPort, ApprovalRequest, ApprovalResponse
 from code_agent_core.runtime.spec import ExecutionContext
+
+from ..config import ApprovalMode
 
 
 class TerminalApprovalPort:
@@ -43,3 +45,36 @@ class TerminalApprovalPort:
                     approved=False,
                 )
             self._output.write("请输入 y / a / n。\n")
+
+
+class ModeApprovalPort:
+    """Wrap an ApprovalPort with a runtime-switchable approval mode.
+
+    In ``auto`` mode every ask decision is approved without interrupting the
+    user; policy denials still apply because they never reach this port.
+    """
+
+    def __init__(self, inner: ApprovalPort, *, mode: ApprovalMode = ApprovalMode.ASK) -> None:
+        self._inner = inner
+        self._mode = mode
+
+    @property
+    def mode(self) -> ApprovalMode:
+        """Current approval mode."""
+        return self._mode
+
+    def set_mode(self, mode: ApprovalMode) -> None:
+        """Switch between interactive confirmation and auto-accept."""
+        self._mode = mode
+
+    async def request(
+        self,
+        request: ApprovalRequest,
+        context: ExecutionContext,
+    ) -> ApprovalResponse:
+        if self._mode is ApprovalMode.AUTO:
+            return ApprovalResponse(
+                fingerprint=request.call.fingerprint,
+                approved=True,
+            )
+        return await self._inner.request(request, context)

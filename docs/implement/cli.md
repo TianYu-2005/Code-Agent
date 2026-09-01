@@ -10,25 +10,28 @@
 |---|---|
 | `cli/app.py` | REPL 主循环：读取输入、分发命令、运行 AgentLoop |
 | `cli/renderer.py` | `RuntimeEvent` → 终端输出（流式文本、工具状态着色） |
-| `cli/approval.py` | `ApprovalPort` 终端实现（y/a/n 交互） |
-| `cli/commands.py` | 斜杠命令解析（/help /new /model /tree /sessions /quit 等） |
+| `cli/approval.py` | `ApprovalPort` 终端实现（y/a/n 交互）与 `ModeApprovalPort` 审批模式包装 |
+| `cli/commands.py` | 斜杠命令解析（/help /new /model /permissions /tree /sessions /quit 等） |
 | `cli/interrupt.py` | SIGINT → `CancellationToken` |
 | `cli/sessions.py` | 工作区会话目录管理（创建/列出/恢复/导出） |
-| `config.py` | 环境变量读取 |
+| `config.py` | TOML 配置文件 + 环境变量 + CLI 参数的四层合并加载 |
 | `bootstrap.py` | 组合根：装配 Provider、Registry、Executor、Loop |
 
 ## 配置
 
-环境变量：
+配置来源优先级：CLI 参数 > 环境变量 > 项目配置（`<workspace>/.code-agent/config.toml`）> 全局配置（`~/.code-agent/config.toml`）> 默认值。API Key 缺失且在交互终端时自动进入首次配置向导。详见 [app-config.md](app-config.md)。
+
+环境变量（兼容层，仍全部支持）：
 
 ```text
-CODE_AGENT_API_KEY       必填
+CODE_AGENT_API_KEY       必填（或配置文件/向导提供）
 CODE_AGENT_BASE_URL      默认 https://api.deepseek.com
 CODE_AGENT_MODEL         默认 deepseek-v4-flash
 CODE_AGENT_MAX_TURNS     默认 30
+CODE_AGENT_HOME          全局配置目录，默认 ~/.code-agent
 ```
 
-默认值按 [DeepSeek API 文档](https://api-docs.deepseek.com/zh-cn/) 对齐：只设置 API Key 即可直连 DeepSeek。`base_url` 的域名会自动加入 Provider 的可信主机列表，满足模型层的 SSRF 防护要求。
+`base_url` 的域名会自动加入 Provider 的可信主机列表，满足模型层的 SSRF 防护要求。
 
 ## 交互流程
 
@@ -94,9 +97,10 @@ CODE_AGENT_MAX_TURNS     默认 30
 - 创建 `RetryingProvider(OpenAICompatibleProvider)`
 - 注册全部 12 个内置 Coding Tools（含后台进程生命周期工具）
 - 加载 `AGENTS.md` 项目指令进 ContextPolicy
-- 绑定 `TerminalApprovalPort` 和 `CancelState`
+- 用 `ModeApprovalPort` 包装 `TerminalApprovalPort`（支持运行时 ask/auto 切换）
+- 绑定 `CancelState`；提供 `switch_model()` 运行时切换模型/profile
 
-入口命令：`code-agent`（pyproject 的 project.scripts）。
+入口命令：`code-agent`（pyproject 的 project.scripts，`--cli` 走经典 REPL，默认 TUI）。
 
 ## 测试
 

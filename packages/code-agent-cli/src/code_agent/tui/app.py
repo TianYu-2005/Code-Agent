@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pyfiglet
 from rich.markdown import Markdown
@@ -15,6 +16,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Input, RichLog, Static
 
+from ..config import ApprovalMode
 from .messages import AgentEvent, ApprovalAsked, TaskFinished
 from .renderer import TuiApprovalPort, TuiRenderer
 
@@ -22,16 +24,17 @@ if TYPE_CHECKING:
     from ..bootstrap import AgentRuntime
 
 HELP_TEXT = """可用命令:
-  /help     显示本帮助
-  /new      开始新会话
-  /model    显示当前模型
-  /sessions 列出历史会话；/sessions <序号> 恢复
-  /tree     显示当前对话树
-  /rewind   回退 n 条消息并从该点分叉（/rewind <n>）
-  /fork     切换到其他分支（/fork <序号>）
-  /quit     退出
+  /help       显示本帮助
+  /new        开始新会话
+  /model      列出可用模型；/model <名称> 切换模型或 profile
+  /permissions [ask|auto]  查看/切换审批模式（也可用 Shift+Tab）
+  /sessions   列出历史会话；/sessions <序号> 恢复
+  /tree       显示当前对话树
+  /rewind     回退 n 条消息并从该点分叉（/rewind <n>）
+  /fork       切换到其他分支（/fork <序号>）
+  /quit       退出
 
-其他输入会作为任务发送给 Agent。Ctrl+C 取消当前运行。"""
+快捷键: Shift+Tab 切换审批模式 · Ctrl+C 取消当前运行/退出"""
 
 BANNER_LOGO_ART = pyfiglet.figlet_format("SEECODER", font="Big", width=200).rstrip("\n")
 BANNER_LINE_STYLES = (
@@ -52,9 +55,25 @@ TOOL_STATUS = {
     "timeout": ("⚠", "yellow"),
     "cancelled": ("·", "yellow"),
 }
-
-USER_STYLE = ("User", "bold cyan")
+USER_STYLE = ("❯", "bold cyan")
 ASSISTANT_STYLE = ("Agent", "bold magenta")
+MODE_LABELS = {
+    ApprovalMode.ASK: "ask",
+    ApprovalMode.AUTO: "auto",
+}
+# Argument keys shown in the one-line tool summary, most relevant first.
+_TOOL_ARG_KEYS = ("path", "file_path", "command", "pattern", "query", "url", "text", "content")
+_SEPARATOR_WIDTH = 56
+
+
+class PromptInput(Input):
+    """Input that routes Shift+Tab to the approval-mode toggle.
+
+    Screen-level bindings would otherwise consume the key for focus
+    switching before the App can see it.
+    """
+
+    BINDINGS = [("shift+tab", "app.toggle_approval_mode", "切换审批模式")]
 
 
 class CodeAgentApp(App[None]):
@@ -81,7 +100,9 @@ class CodeAgentApp(App[None]):
             yield RichLog(id="transcript", markup=True, wrap=True, auto_scroll=True)
             yield Static(id="streaming")
             yield Static(id="approval")
-            yield Input(placeholder="输入任务，/ 查看命令…", id="prompt")
+            yield PromptInput(
+                placeholder="描述任务，/help 查看命令，Shift+Tab 切换审批模式…", id="prompt"
+            )
             yield Static(id="status")
 
     def on_mount(self) -> None:
@@ -108,7 +129,7 @@ class CodeAgentApp(App[None]):
     def on_resize(self, event: events.Resize) -> None:
         """Track the terminal size: keep the App one cell shorter than the height.
 
-        Inline mode places the App on top of the terminal; pinning the Screen
+        inline mode places the App on top of the terminal; pinning the Screen
         height to ``size.height - 1`` ensures the bottom status bar is always
         visible regardless of the window size, and the rest of the terminal
         stays usable as scrollback.
@@ -188,21 +209,7 @@ class CodeAgentApp(App[None]):
             name = str(payload.get("tool", "工具"))
             self._set_status(f"执行工具 {name}…")
         elif kind == "tool_completed":
-            status = str(payload.get("status", "success"))
-            name = str(payload.get("tool", "工具"))
-            arguments = str(payload.get("arguments", ""))
-            content = str(payload.get("content", ""))
-            icon, color = TOOL_STATUS.get(status, ("·", "white"))
-            self._transcript(Text(""))
-            header = Text()
-            header.append("  ▸ ", style="dim")
-            header.append(f"{name} ", style="bold cyan")
-            header.append(icon, style=color)
-            header.append(f" {status}", style=color)
-            header.append(f"  {arguments}", style="dim")
-            self._transcript(header)
-            if content and status in {"error", "timeout", "denied"}:
-                self._transcript_tool_error(content)
+            self._render_tool_result(payload)
         elif kind == "context_compacted":
             self._transcript(Text(""))
             if str(payload.get("status")) == "failed":
@@ -258,6 +265,20 @@ class CodeAgentApp(App[None]):
         else:
             self.exit()
 
+    def action_toggle_approval_mode(self) -> None:
+        """Cycle between ask and auto approval (Shift+Tab)."""
+        if self._runtime is None:
+            return
+        current = self._runtime.approval_mode
+        new_mode = ApprovalMode.AUTO if current is ApprovalMode.ASK else ApprovalMode.ASK
+        self._runtime.set_approval_mode(new_mode)
+        if new_mode is ApprovalMode.AUTO:
+            hint = "◇ 审批模式: auto — 工具调用自动放行（Shift+Tab 切回）"
+        else:
+            hint = "◇ 审批模式: ask — 工具调用需要逐次确认（Shift+Tab 切换）"
+        self._transcript(Text(hint, style="dim"))
+        self._set_status("就绪" if not self._task_running else "运行中")
+
     # --------------------------------------------------------------- commands
 
     def _handle_command(self, text: str) -> None:
@@ -275,9 +296,9 @@ class CodeAgentApp(App[None]):
             self._runtime.new_session()
             self._transcript(Text("已开始新会话。", style="cyan"))
         elif command == "model":
-            info = f"当前模型: {self._runtime.config.model}"
-            base_url = self._runtime.config.base_url
-            self._transcript(Text(f"{info}\nEndpoint: {base_url}", style="dim"))
+            self._handle_model(argument)
+        elif command in {"permissions", "permission", "perm"}:
+            self._handle_permissions(argument)
         elif command == "tree":
             branches = self._runtime.session.list_branches()
             if not branches:
@@ -299,6 +320,45 @@ class CodeAgentApp(App[None]):
             self._handle_fork(argument)
         else:
             self._transcript(Text(f"未知命令: /{command}\n{HELP_TEXT}", style="dim"))
+
+    def _handle_model(self, argument: str | None) -> None:
+        assert self._runtime is not None
+        if argument:
+            try:
+                message = self._runtime.switch_model(argument)
+            except ValueError as error:
+                self._transcript(Text(f"切换失败: {error}", style="red"))
+                return
+            self._transcript(Text(message, style="cyan"))
+            self._set_status("就绪" if not self._task_running else "运行中")
+            return
+        lines = [Text("可用模型（/model <名称> 切换）:", style="dim")]
+        current = self._runtime.config
+        for name, profile in current.available_profiles().items():
+            marker = " ← 当前" if profile.model == current.model else ""
+            host = profile.base_url or current.base_url
+            lines.append(Text(f"  {name} — {profile.model} @ {host}{marker}", style="dim"))
+        lines.append(Text("  也可直接用 /model <模型名>（沿用当前 endpoint）", style="dim"))
+        for line in lines:
+            self._transcript(line)
+
+    def _handle_permissions(self, argument: str | None) -> None:
+        assert self._runtime is not None
+        if argument is None:
+            mode = self._runtime.approval_mode
+            hint = {
+                ApprovalMode.ASK: "工具调用需要逐次确认",
+                ApprovalMode.AUTO: "工具调用自动放行，不再逐次确认",
+            }[mode]
+            self._transcript(Text(f"当前审批模式: {MODE_LABELS[mode]} — {hint}", style="dim"))
+            return
+        if argument not in {"ask", "auto"}:
+            self._transcript(Text("用法: /permissions [ask|auto]", style="yellow"))
+            return
+        self._runtime.set_approval_mode(ApprovalMode(argument))
+        label = "auto（自动放行）" if argument == "auto" else "ask（逐次确认）"
+        self._transcript(Text(f"审批模式已切换为 {label}。", style="cyan"))
+        self._set_status("就绪" if not self._task_running else "运行中")
 
     def _handle_sessions(self, argument: str | None) -> None:
         assert self._runtime is not None
@@ -388,12 +448,13 @@ class CodeAgentApp(App[None]):
         log.write(line)
 
     def _transcript_user(self, text: str) -> None:
+        """Render one user turn: a thin separator above the message."""
         log = self.query_one("#transcript", RichLog)
         log.write(Text(""))
-        log.write(Text(""))
-        label, style = USER_STYLE
+        log.write(Text("─" * _SEPARATOR_WIDTH, style="dim"))
+        marker, style = USER_STYLE
         line = Text()
-        line.append(f"{label} ", style=style)
+        line.append(f"{marker} ", style=style)
         line.append(text)
         log.write(line)
 
@@ -407,6 +468,24 @@ class CodeAgentApp(App[None]):
         log.write(Text(f"{label} ", style=style))
         log.write(Markdown(text, code_theme="native", hyperlinks=True))
 
+    def _render_tool_result(self, payload: dict[str, Any]) -> None:
+        """One compact summary line per tool call: ⏺ name(key=val…) ✓."""
+        status = str(payload.get("status", "success"))
+        name = str(payload.get("tool", "工具"))
+        arguments = str(payload.get("arguments", ""))
+        content = str(payload.get("content", ""))
+        icon, color = TOOL_STATUS.get(status, ("·", "white"))
+        line = Text()
+        line.append("  ⏺ ", style="dim")
+        line.append(name, style="bold cyan")
+        summary = _tool_args_summary(arguments)
+        if summary:
+            line.append(f"({summary})", style="dim")
+        line.append(f" {icon}", style=color)
+        self._transcript(line)
+        if content and status in {"error", "timeout", "denied"}:
+            self._transcript_tool_error(content)
+
     def _transcript_tool_error(self, content: str) -> None:
         """Show tool failure content as an indented Markdown code block."""
         log = self.query_one("#transcript", RichLog)
@@ -416,23 +495,53 @@ class CodeAgentApp(App[None]):
     def _set_status(self, status: str) -> None:
         assert self._runtime is not None
         model = self._runtime.config.model
-        hint = "Ctrl+C 取消" if self._task_running else "/help 命令"
+        mode = MODE_LABELS[self._runtime.approval_mode]
+        workspace = self._runtime.workspace
+        cwd = workspace.name or str(workspace)
         bar = Text()
-        bar.append(f" ⏵ {status}", style="bold cyan")
+        bar.append(f" ● {status}", style="bold cyan")
         bar.append(f"  ·  {model}", style="dim")
-        bar.append(f"  ·  {hint}", style="dim")
+        bar.append(f"  ·  {mode}", style="dim")
+        bar.append(f"  ·  {cwd}", style="dim")
         self.query_one("#status", Static).update(bar)
 
 
-def run_tui() -> None:
+def _tool_args_summary(arguments: str, *, max_values: int = 2, max_width: int = 48) -> str:
+    """Compress tool arguments into `key=value` pairs for the summary line."""
+    try:
+        parsed = json.loads(arguments)
+    except (json.JSONDecodeError, TypeError):
+        parsed = None
+    if not isinstance(parsed, dict) or not parsed:
+        return ""
+    chosen: list[str] = []
+    for key in _TOOL_ARG_KEYS:
+        if key in parsed and len(chosen) < max_values:
+            value = parsed[key]
+            if isinstance(value, (list, tuple)):
+                value = " ".join(str(part) for part in value)
+            text = str(value).replace("\n", " ").strip()
+            if len(text) > max_width:
+                text = text[:max_width] + "…"
+            chosen.append(f"{key}={text}")
+    if not chosen:
+        for key, value in list(parsed.items())[:max_values]:
+            text = str(value).replace("\n", " ").strip()
+            if len(text) > max_width:
+                text = text[:max_width] + "…"
+            chosen.append(f"{key}={text}")
+    return ", ".join(chosen)
+
+
+def run_tui(workspace: str | None = None, overrides: dict[str, str] | None = None) -> None:
     """Assemble the runtime and launch the inline TUI."""
     import sys
 
     from ..bootstrap import AgentRuntime
-    from ..config import load_config
+    from ..config import load_config_or_wizard
 
     try:
-        config = load_config()
+        config = load_config_or_wizard(workspace=workspace, overrides=overrides)
     except Exception as error:  # noqa: BLE001
         sys.stderr.write(f"配置错误: {error}\n")
         raise SystemExit(1) from error

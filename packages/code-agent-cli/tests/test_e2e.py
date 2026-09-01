@@ -127,7 +127,7 @@ def test_journey_task_approval_persist_resume(
         await _wait_for(lambda: not app._task_running and "已创建" in _log_text(app))
         assert (tmp_path / "hello.txt").read_text(encoding="utf-8") == "hello e2e"
         log = _log_text(app)
-        assert "User 写一个 hello.txt" in log
+        assert "❯ 写一个 hello.txt" in log
         assert "Agent" in log and "已创建 hello.txt" in log
 
     app = _build_app(tmp_path, first_scripts)

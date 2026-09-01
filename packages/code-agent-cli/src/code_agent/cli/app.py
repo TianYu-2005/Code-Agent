@@ -48,9 +48,9 @@ def _handle_command(runtime: "AgentRuntime", command: str, argument: str | None)
         runtime.new_session()
         renderer.info("已开始新会话。")
     elif command == "model":
-        renderer.info(f"当前模型: {runtime.config.model}")
-        if runtime.config.base_url:
-            renderer.info(f"Endpoint: {runtime.config.base_url}")
+        _handle_model(runtime, argument)
+    elif command in {"permissions", "permission", "perm"}:
+        _handle_permissions(runtime, argument)
     elif command == "sessions":
         _handle_sessions(runtime, argument)
     elif command == "tree":
@@ -74,6 +74,44 @@ def _handle_command(runtime: "AgentRuntime", command: str, argument: str | None)
 def _current_head_id(runtime: "AgentRuntime") -> str | None:
     path = runtime.session.current_path()
     return path[-1].id if path else None
+
+
+def _handle_model(runtime: "AgentRuntime", argument: str | None) -> None:
+    """List available models or switch to the given one."""
+    renderer = runtime.renderer
+    if argument:
+        try:
+            renderer.info(runtime.switch_model(argument))
+        except ValueError as error:
+            renderer.info(f"切换失败: {error}")
+        return
+    renderer.info("可用模型（/model <名称> 切换）:")
+    config = runtime.config
+    for name, profile in config.available_profiles().items():
+        marker = "（当前）" if profile.model == config.model else ""
+        host = profile.base_url or config.base_url
+        renderer.info(f"  {name} — {profile.model} @ {host}{marker}")
+    renderer.info("  也可直接用 /model <模型名>（沿用当前 endpoint）")
+
+
+def _handle_permissions(runtime: "AgentRuntime", argument: str | None) -> None:
+    """Show or switch the tool approval mode."""
+    from ..config import ApprovalMode
+
+    renderer = runtime.renderer
+    if argument is None:
+        mode = runtime.approval_mode
+        hint = {
+            ApprovalMode.ASK: "工具调用需要逐次确认",
+            ApprovalMode.AUTO: "工具调用自动放行，不再逐次确认",
+        }[mode]
+        renderer.info(f"当前审批模式: {mode.value} — {hint}")
+        return
+    if argument not in {"ask", "auto"}:
+        renderer.info("用法: /permissions [ask|auto]")
+        return
+    runtime.set_approval_mode(ApprovalMode(argument))
+    renderer.info(f"审批模式已切换为 {argument}。")
 
 
 def _handle_rewind(runtime: "AgentRuntime", argument: str | None) -> None:
@@ -223,13 +261,13 @@ async def run_app(runtime: "AgentRuntime") -> None:
             renderer.info(f"运行失败: {error}")
 
 
-def main() -> None:
+def main(workspace: str | None = None, overrides: dict[str, str] | None = None) -> None:
     """CLI entry point."""
     from ..bootstrap import AgentRuntime
-    from ..config import load_config
+    from ..config import load_config_or_wizard
 
     try:
-        config = load_config()
+        config = load_config_or_wizard(workspace=workspace, overrides=overrides)
     except Exception as error:  # noqa: BLE001
         sys.stderr.write(f"配置错误: {error}\n")
         raise SystemExit(1) from error

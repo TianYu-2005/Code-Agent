@@ -285,7 +285,7 @@ def test_banner_and_speaker_labels(
         await pilot.press("enter")
         await _wait_for(lambda: not app._task_running and "pong" in _log_text(app))
         log_text = _log_text(app)
-        assert "User ping" in log_text
+        assert "❯ ping" in log_text
         assert "Agent" in log_text
         assert "pong" in log_text
 
@@ -324,6 +324,167 @@ def test_layout_follows_terminal_size(
     assert heights[0] >= 35
     assert heights[1] >= 17
     assert heights[0] > heights[1]
+
+
+def test_user_turn_renders_separator_and_marker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+
+    async def actions(pilot: Any) -> None:
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "hello there"
+        await pilot.press("enter")
+        await pilot.pause()
+        text = _log_text(app)
+        assert "❯ hello there" in text
+        assert "─" in text  # thin separator above the user message
+
+    app = _build_app(tmp_path, [])
+    asyncio.run(_drive(app, actions))
+
+
+def test_tool_result_renders_compact_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from code_agent_llm import FinishReason, ModelResponse, ToolCall
+
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+    monkeypatch.chdir(tmp_path)
+
+    first = _event(
+        "completed",
+        ModelResponse(
+            content="",
+            tool_calls=(
+                ToolCall(
+                    id="call-1",
+                    name="write_file",
+                    arguments_json='{"path": "out.txt", "content": "hi"}',
+                ),
+            ),
+            finish_reason=FinishReason.TOOL_CALLS,
+        ),
+    )
+    second = _event("completed", ModelResponse(content="done", finish_reason=FinishReason.STOP))
+
+    async def actions(pilot: Any) -> None:
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "go"
+        await pilot.press("enter")
+        await _wait_for(lambda: app._pending_approval is not None)
+        await pilot.press("y")
+        await _wait_for(lambda: not app._task_running)
+        text = _log_text(app)
+        assert "write_file(path=out.txt" in text
+        assert "✓" in text
+        # full JSON arguments must not leak into the summary line
+        assert '"content": "hi"' not in text
+
+    app = _build_app(tmp_path, [[first], [second]])
+    asyncio.run(_drive(app, actions))
+
+
+def test_auto_mode_skips_approval(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from code_agent_llm import FinishReason, ModelResponse, ToolCall
+
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+    monkeypatch.chdir(tmp_path)
+
+    first = _event(
+        "completed",
+        ModelResponse(
+            content="我来写文件",
+            tool_calls=(
+                ToolCall(
+                    id="call-1",
+                    name="write_file",
+                    arguments_json='{"path": "auto.txt", "content": "hi"}',
+                ),
+            ),
+            finish_reason=FinishReason.TOOL_CALLS,
+        ),
+    )
+    second = _event("completed", ModelResponse(content="写好了", finish_reason=FinishReason.STOP))
+
+    async def actions(pilot: Any) -> None:
+        # Switch to auto mode with Shift+Tab.
+        await pilot.press("shift+tab")
+        await pilot.pause()
+        assert app._runtime is not None
+        assert app._runtime.approval_mode.value == "auto"
+        assert "auto" in str(app.query_one("#status", Static).content)
+        # The write goes through with no approval prompt.
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "写一个 auto.txt"
+        await pilot.press("enter")
+        await pilot.pause()
+        # Wait for a terminal condition; "not _task_running" alone races with
+        # the worker that has not started yet.
+        await _wait_for(lambda: (tmp_path / "auto.txt").exists() or "运行失败" in _log_text(app))
+        await _wait_for(lambda: not app._task_running)
+        assert app._pending_approval is None
+        assert (tmp_path / "auto.txt").read_text(encoding="utf-8") == "hi"
+        assert "写好了" in _log_text(app)
+
+    app = _build_app(tmp_path, [[first], [second]])
+    asyncio.run(_drive(app, actions))
+
+
+def test_model_command_lists_and_switches(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+
+    async def actions(pilot: Any) -> None:
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "/model"
+        await pilot.press("enter")
+        await pilot.pause()
+        text = _log_text(app)
+        assert "deepseek-reasoner" in text  # builtin presets are listed
+        assert "← 当前" in text  # current model is marked
+        # Switch to another builtin profile.
+        prompt.value = "/model deepseek-reasoner"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app._runtime is not None
+        assert app._runtime.config.model == "deepseek-reasoner"
+        assert "已切换" in _log_text(app)
+        # The status bar reflects the new model.
+        assert "deepseek-reasoner" in str(app.query_one("#status", Static).content)
+
+    app = _build_app(tmp_path, [])
+    asyncio.run(_drive(app, actions))
+
+
+def test_permissions_command_switches_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("CODE_AGENT_API_KEY", "test-key")
+
+    async def actions(pilot: Any) -> None:
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "/permissions"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "ask" in _log_text(app)
+        prompt.value = "/permissions auto"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app._runtime is not None
+        assert app._runtime.approval_mode.value == "auto"
+        assert "auto" in _log_text(app)
+
+    app = _build_app(tmp_path, [])
+    asyncio.run(_drive(app, actions))
 
 
 # ------------------------------------------------------------------ helpers

@@ -54,12 +54,14 @@ Screen {
 #prompt {
     dock: bottom;
     margin: 0 1 0 1;
+    padding: 1 2;
     border: round $accent-darken-1;
     background: $boost;
 }
 
 #prompt:focus {
     border: round $accent;
+    background: $boost;
 }
 
 #status {

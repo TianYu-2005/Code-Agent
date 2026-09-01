@@ -12,7 +12,17 @@ class CommandResult:
     argument: str | None = None
 
 
-KNOWN_COMMANDS = ("help", "new", "model", "quit", "sessions", "tree", "rewind", "fork")
+KNOWN_COMMANDS = (
+    "help",
+    "new",
+    "model",
+    "permissions",
+    "quit",
+    "sessions",
+    "tree",
+    "rewind",
+    "fork",
+)
 
 
 def parse_input(line: str) -> CommandResult:
@@ -31,13 +41,14 @@ def parse_input(line: str) -> CommandResult:
 
 
 HELP_TEXT = """可用命令:
-  /help     显示本帮助
-  /new      开始新会话（自动持久化到 .code-agent/sessions/）
-  /model    显示当前模型
-  /sessions 列出历史会话；/sessions <序号> 恢复；/sessions export <序号> 导出
-  /tree     显示当前对话树
-  /rewind   回退 n 条消息并从该点分叉（/rewind <n>）
-  /fork     切换到其他分支继续（/fork <序号>）
-  /quit     退出
+  /help       显示本帮助
+  /new        开始新会话（自动持久化到 .code-agent/sessions/）
+  /model      列出可用模型；/model <名称> 切换模型或 profile
+  /permissions [ask|auto]  查看/切换审批模式
+  /sessions   列出历史会话；/sessions <序号> 恢复；/sessions export <序号> 导出
+  /tree       显示当前对话树
+  /rewind     回退 n 条消息并从该点分叉（/rewind <n>）
+  /fork       切换到其他分支继续（/fork <序号>）
+  /quit       退出
 
 其他输入会作为任务发送给 Agent。Ctrl+C 取消当前运行。"""

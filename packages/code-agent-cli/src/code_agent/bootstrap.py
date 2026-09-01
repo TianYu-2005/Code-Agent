@@ -27,12 +27,21 @@ from code_agent_llm import (
     RetryPolicy,
 )
 
-from .cli.approval import TerminalApprovalPort
+from .cli.approval import ModeApprovalPort, TerminalApprovalPort
 from .cli.interrupt import CancelState
 from .cli.renderer import RecordingSink, TerminalRenderer
 from .cli.sessions import SessionManager
 from .coding_tools import default_coding_tools
-from .config import AppConfig
+from .config import AppConfig, ApprovalMode, ModelProfile
+
+
+def _same_endpoint(config: AppConfig, profile: ModelProfile) -> bool:
+    """Whether switching to this profile keeps the current endpoint."""
+    if profile.base_url and profile.base_url != config.base_url:
+        return False
+    if profile.api_key and profile.api_key != config.api_key:
+        return False
+    return True
 
 
 class AgentRuntime:
@@ -57,6 +66,7 @@ class AgentRuntime:
         self.cancel_state = CancelState()
         self._event_sink = event_sink
         self._context_policy = context_policy
+        self._external_provider = provider is not None
 
         if provider is None:
             provider = RetryingProvider(
@@ -70,10 +80,14 @@ class AgentRuntime:
         for tool in default_coding_tools():
             self.registry.register(tool, origin=ToolOrigin.BUILTIN)
 
+        self.approval = ModeApprovalPort(
+            approval_port or TerminalApprovalPort(),
+            mode=config.approval_mode,
+        )
         self.executor = ToolExecutor(
             self.registry,
             DefaultPermissionPolicy(),
-            approval_port or TerminalApprovalPort(),
+            self.approval,
         )
 
         self._rebind_session()
@@ -118,6 +132,43 @@ class AgentRuntime:
             tool_set=frozenset(self.registry.names()),
             budgets=RunBudgets(max_turns=self.config.max_turns),
         )
+
+    # ------------------------------------------------- runtime reconfiguration
+
+    @property
+    def approval_mode(self) -> ApprovalMode:
+        """Current tool approval mode."""
+        return self.approval.mode
+
+    def set_approval_mode(self, mode: ApprovalMode) -> None:
+        """Switch between interactive confirmation and auto-accept."""
+        self.config.approval_mode = mode
+        self.approval.set_mode(mode)
+
+    def switch_model(self, name: str) -> str:
+        """Switch to a profile or a bare model name; returns a description."""
+        profile = self.config.resolve_profile(name)
+        if profile is not None and not _same_endpoint(self.config, profile):
+            self.config.apply_profile(profile)
+            self._rebuild_provider()
+            self._rebind_session()
+            return f"已切换到 {profile.name}（{profile.model} @ {self.config.base_url}）"
+        if profile is not None:
+            self.config.apply_profile(profile)
+        else:
+            self.config.model = name
+        self._rebind_session()
+        return f"已切换模型: {self.config.model}"
+
+    def _rebuild_provider(self) -> None:
+        """Rebuild the provider stack after an endpoint change."""
+        if self._external_provider:
+            return  # injected providers (tests) stay in place
+        self.provider = RetryingProvider(
+            OpenAICompatibleProvider(self.config.provider_config),
+            RetryPolicy(),
+        )
+        self.compactor = Compactor(self.provider)
 
     def make_loop(self) -> Loop:
         """Create a loop bound to the current session."""
